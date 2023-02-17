@@ -149,14 +149,15 @@ def build_charge_events(labels_noise_list,dataword,all_charge,txyz,v_ref,v_cm,v_
     z_vals = z_vals[q_vals != 0]
     n_vals = n_vals[q_vals != 0]
     q_vals = q_vals[q_vals != 0]
-
-    nqtxyz = np.zeros((len(n_vals[n_vals != 0]), 6))
-    nqtxyz[:,0] = n_vals
-    nqtxyz[:,1] = q_vals
-    nqtxyz[:,2] = t_vals/n_vals # average for each event
-    nqtxyz[:,3] = x_vals/n_vals
-    nqtxyz[:,4] = y_vals/n_vals
-    nqtxyz[:,5] = z_vals/n_vals
+    
+    event_dtype = np.dtype([('nhit', '<u1'), ('q', '<f8'),('t', '<f8'),('x', '<f8'),('y', '<f8'),('z', '<f8')])
+    nqtxyz = np.zeros((len(n_vals[n_vals != 0]),), dtype=event_dtype)
+    nqtxyz['nhit'] = n_vals
+    nqtxyz['q'] = q_vals
+    nqtxyz['t'] = t_vals/n_vals # average for each event
+    nqtxyz['x'] = x_vals/n_vals
+    nqtxyz['y'] = y_vals/n_vals
+    nqtxyz['z'] = z_vals/n_vals
     return nqtxyz
 
 def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
