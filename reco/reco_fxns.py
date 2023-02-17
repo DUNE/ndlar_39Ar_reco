@@ -1,6 +1,5 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
-from larndsim import consts, fee
 from collections import defaultdict
 import json
 import time
@@ -168,7 +167,7 @@ def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
     #   indices: array of indices
     # Outputs:
     #   array of charge in ke- 
-    charge = (adcs.astype('float64')/float(fee.ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)/gain * 1e-3
+    charge = (adcs.astype('float64')/float(ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)/gain * 1e-3
     return charge
 
 def pedestal_and_config(unique_ids, mc_assn):
