@@ -4,18 +4,11 @@ from larndsim import consts, fee
 from collections import defaultdict
 import json
 import time
-from numba import jit
 from reco_constants import *
-#from uncertainties import ufloat
 import matplotlib.pyplot as plt
 import pickle 
 import scipy.stats
 import h5py
-#from sklearn.metrics.pairwise import euclidean_distances
-#import cupy
-from sklearn.metrics import pairwise_distances
-from multiprocessing import Pool
-
 
 def load_geom_dict(geom_dict_path):
     with open(geom_dict_path, "rb") as f_geom_dict:
@@ -30,7 +23,7 @@ def zip_pixel_tyz(packets,ts, pixel_xy):
     x_inmm, y_inmm,z_inmm = [],[],[]
     num_keyerrors = 0
     num_notkeyerrors = 0
-    start = time.time()
+    
     for i in range(len(packets)):
         try:
             xyz = pixel_xy[packets['io_group'][i],packets['io_channel'][i],packets['chip_id'][i],packets['channel_id'][i]]
@@ -42,10 +35,8 @@ def zip_pixel_tyz(packets,ts, pixel_xy):
             x_inmm.append(0.0)
             y_inmm.append(0.0)
             z_inmm.append(0.0)
-            #print("KeyError ")
             num_keyerrors += 1
-    end = time.time()
-    print('zip pixel tyz 1 = ', end-start)
+
     #print('Number of keyerrors = ' , num_keyerrors)
     #print('Number of not keyerrors = ' , num_notkeyerrors)
     #if num_notkeyerrors != 0:
@@ -56,20 +47,11 @@ def zip_pixel_tyz(packets,ts, pixel_xy):
     #                    + packets['channel_id'][i].astype(int)
     
     # zip together t, y, z arrays together to give to clustering method
-    start = time.time()
     txyz = []
     for t,x,y,z in zip(ts_inmm,x_inmm,y_inmm,z_inmm):
         txyz.append([t,x,y,z])
-    end = time.time()
-    print('zip 2 = ', end-start )
-    return txyz
 
-# define the kernel
-def dbscan_parallel(x, eps, min_samples): 
-    # compute DBSCAN 
-    #db = DBSCAN(eps=eps, min_samples=min_samples).fit(x)
-    db = DBSCAN(metric='precomputed', min_samples=min_samples).fit(x)
-    return db
+    return txyz
 
 def cluster_packets(eps,min_samples,txyz):
     ### Cluster packets into charge events
@@ -77,28 +59,22 @@ def cluster_packets(eps,min_samples,txyz):
     # OUTPUT: txyz values for core, noise, and noncore samples. And returns DBSCAN fit db.
     start = time.time()
     db = DBSCAN(eps=eps, min_samples=min_samples).fit(txyz) 
-    end = time.time()
-    print('5.1.1 = ', end-start)
     txyz = np.array(txyz)
     # core samples
     core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
     core_samples_mask[db.core_sample_indices_] = True
-    print("The total number of core samples = ", np.sum(core_samples_mask))
     txyz_coresamples = np.array(txyz)[core_samples_mask]
     # noise samples
     noise_samples_mask = db.labels_ == -1
     txyz_noise = txyz[noise_samples_mask]
     # non-core samples
-    
-    print("Total number of noise samples = ", np.sum(noise_samples_mask))
     coreplusnoise_samples_mask = core_samples_mask + noise_samples_mask
     noncore_samples_mask = np.invert(coreplusnoise_samples_mask)
-    print("Total number of noncore samples = ", np.sum(noncore_samples_mask))
     txyz_noncoresamples = txyz[noncore_samples_mask]
     return txyz_coresamples, txyz_noise, txyz_noncoresamples,db
 
 def cosmic_veto(not_accepted_candidates_mask, labels_cosmics, tyz, candidate_t,candidate_x,candidate_y, candidate_z, time_window, space_window):
-    ### function for applying a veto on 39Ar candidates near cosmic tracks
+    ### function for applying a veto on 39Ar candidates near cosmic tracks. Not validated or tested recently.
     #, tyz, candidate_t, time_window=300
         # loop through large clusters
         labels_cosmics = np.array(labels_cosmics)
@@ -192,9 +168,7 @@ def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
     #   indices: array of indices
     # Outputs:
     #   array of charge in ke- 
-    #charge = (adcs.astype('float64')/float(fee.ADC_COUNTS)*(v_ref[indices] - v_cm[indices])+v_cm[indices]-v_ped[indices])/gain[indices] * 1e-3
     charge = (adcs.astype('float64')/float(fee.ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)/gain * 1e-3
-    
     return charge
 
 def pedestal_and_config(unique_ids, mc_assn):
@@ -249,39 +223,29 @@ def pedestal_and_config(unique_ids, mc_assn):
 def timestamp_corrector(packets, mc_assn):
     # Corrects larpix clock timestamps due to slightly different PACMAN clock frequencies 
     # (from module0_flow timestamp_corrector.py)
-    start = time.time()
     ts = packets['timestamp'].astype('f8')
-    end = time.time()
-    print('block 1.2.1 = ', end-start)
-    #ts_corr = np.zeros_like(ts, dtype='i8')
-    start = time.time()
+
     if mc_assn == None:
-        #timestamp_cut = (packets['timestamp'] > 2e7) | (packets['timestamp'] < 1e6) & (packets['packet_type'] == 0) 
         timestamp_cut = (packets['timestamp'] > 2e7) | (packets['timestamp'] < 1e6)
         ts = ts[np.invert(timestamp_cut)]
         packets = packets[np.invert(timestamp_cut)]
-    end = time.time()
-    print('block 1.2.2 = ', end-start)
+
     #packet_type_0 = packets['packet_type'] == 0
     #if mc_assn: # optionally, cut data packets without mc_truth
     #    mc_assn = mc_assn[np.invert(timestamp_cut)]
     #    mc_assn_tracks = mc_assn['track_ids'][packet_type_0]
     #    packets = packets[mc_assn_tracks[:,0] != -1]
     #    ts_corr = ts_corr[mc_assn_tracks[:,0] != -1]
-    start = time.time()
+
     if mc_assn == None:
+        # only supports module-0
         correction1 = [-9.597, 4.0021e-6]
         correction2 = [-9.329, 1.1770e-6]
         mask_io1 = packets['io_group'] == 1
         mask_io2 = packets['io_group'] == 2
         ts[mask_io1] = (packets[mask_io1]['timestamp'].astype('f8') - correction1[0]) / (1. + correction1[1])
         ts[mask_io2] = (packets[mask_io2]['timestamp'].astype('f8') - correction2[0]) / (1. + correction2[1])
-    end= time.time()
-    print('block 1.2.3 = ', end-start)
-    #else:
-    #    mc_assn = mc_assn[np.invert(timestamp_cut)]
-    start = time.time()
-    
+
     # correct for rollovers
     rollover_ticks = 1e7
     #Create arrays to keep track of rollovers
@@ -302,10 +266,6 @@ def timestamp_corrector(packets, mc_assn):
     ts[(packets['io_group'] == 2) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) < 0)] += rollover_io2[(packets['io_group'] == 2) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) < 0)] - rollover_ticks
     ts[(packets['io_group'] == 2) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) > 0)] += rollover_io2[(packets['io_group'] == 2) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) > 0)]
     
-    end= time.time()
-    print('block 1.2.4 = ', end-start)
-    
-    start = time.time()
     packet_type_0 = packets['packet_type'] == 0
     ts = ts[packet_type_0]
     packets = packets[packet_type_0]
@@ -313,8 +273,6 @@ def timestamp_corrector(packets, mc_assn):
     sorted_idcs = np.argsort(ts)
     ts_corr_sorted = ts[sorted_idcs]
     packets_sorted = packets[sorted_idcs]
-    end = time.time()
-    print('block 1.2.5 = ', end-start)
     return ts_corr_sorted, packets_sorted
 
 def getPackets(file, sel_start, sel_end):
@@ -329,14 +287,9 @@ def getPackets(file, sel_start, sel_end):
     packets = file['packets']
     if sel_end == -1:
         sel_end = len(packets)
-    start = time.time()
     packets = packets[sel_start:sel_end]
-    end = time.time()
-    print('block 1.1 = ', end-start, ' s')
-    start = time.time()
     ts, packets = timestamp_corrector(packets, mc_assn)
-    end = time.time()
-    print('block 1.2 = ', end-start, ' s')
+
     return ts, packets, mc_assn
 
 def calibrations(packets, mc_assn):
@@ -350,23 +303,13 @@ def calibrations(packets, mc_assn):
     return v_ped, v_cm, v_ref, gain
     
 def analysis(file,pixel_xy,sel_start=0, sel_end=-1,use_veto=False,time_window=0,space_window=0,cut=False):
-    start = time.time()
     ts, packets, mc_assn = getPackets(file, sel_start, sel_end)
-    end = time.time()
-    print("block 1 = ", end - start, ' s')
-
     dataword = packets['dataword']
     # zip up y, z, and t values for clustering
-    start = time.time()
     txyz = zip_pixel_tyz(packets,ts, pixel_xy)
-    end = time.time()
-    print('block 2 = ', end-start, ' s')
-    start = time.time()
     v_ped, v_cm, v_ref, gain = calibrations(packets, mc_assn)
-    end = time.time()
-    print('block 3 = ', end-start, ' s')
+
     # apply cuts 
-    start = time.time()
     if mc_assn == None and cut == True:
         txyz_array = np.array(txyz)
         z_array = txyz_array[:,3]
@@ -393,49 +336,27 @@ def analysis(file,pixel_xy,sel_start=0, sel_end=-1,use_veto=False,time_window=0,
         v_cm = v_cm[cut_total]
         v_ref = v_ref[cut_total]
         gain = gain[cut_total]
-        print('number of packets to cut = ',np.sum(np.invert(cut_total)))
-    
- 
-    #print('txyz length = ', len(txyz))
-    #print('pkts len = ', len(packets))
 
-    end = time.time()
-    print('block 4 = ', end-start, ' s')
-    #print("Time to zip = ", end-start, ' s')
     # cluster packets to find track-like charge events
-    
-    start = time.time()
     labels_cosmics, labels_noise, labels_noise_list, accepted_candidates_mask,txyz_noise = 0,0,0,0,0
     #### this block is slow
     if mc_assn == None:
-        start = time.time()
         txyz_core, txyz_noise, txyz_noncore, db = cluster_packets(eps_tracks, min_samples_tracks, txyz)
-        end = time.time()
-        print('block 5.1 = ', end-start)
-        #print("Time to do track clustering = ", end- start, ' s')
         labels_cosmics = db.labels_
-        start = time.time()
         # packet coordinates for DBSCAN noise
         candidate_t = txyz_noise[:,0]
         candidate_x = txyz_noise[:,1]
         candidate_y = txyz_noise[:,2]
         candidate_z = txyz_noise[:,3]
-        end = time.time()
-        print('block 5.2 = ', end-start)
-
+        
         accepted_candidates_mask = np.ones_like(candidate_t,dtype=bool)
         # loop through large clusters to do cosmics veto
         if use_veto and not mc_assn:
             not_accepted_candidates_mask = np.zeros_like(candidate_t,dtype=bool)
             accepted_candidates_mask = cosmic_veto(not_accepted_candidates_mask, labels_cosmics, np.array(txyz),candidate_t,candidate_x,candidate_y,candidate_z,time_window,space_window)
-            
-        #print("Time to do cosmic veto = ", end - start, ' s')
-        # cluster packets that remain after tracks have been removed
-        start = time.time()
-        txyz_core, txyz_noise_2, txyz_noncore, db_noise = cluster_packets(eps_noise, min_samples_noise,txyz_noise)
-        end= time.time()
-        print('block 5.3 = ', end-start)
         
+        # cluster packets that remain after tracks have been removed
+        txyz_core, txyz_noise_2, txyz_noncore, db_noise = cluster_packets(eps_noise, min_samples_noise,txyz_noise)
         labels_noise = db_noise.labels_
         labels_noise_list = list(labels_noise)
         noise_samples_mask = db.labels_ == -1
@@ -443,16 +364,11 @@ def analysis(file,pixel_xy,sel_start=0, sel_end=-1,use_veto=False,time_window=0,
         start = time.time()
         txyz_core, txyz_noise_2, txyz_noncore, db_noise = cluster_packets(eps_noise, min_samples_noise,txyz)
         end = time.time()
-        print('block 5.4 = ', end-start)
-        #print('Time to do noise clustering = ', end-start, ' s')
         labels_noise = db_noise.labels_
-        #print('labels noise while IN! = ', labels_noise)
         labels_noise_list = list(labels_noise)
         txyz_noise = txyz
         #noise_samples_mask = db.labels_ == -1
-    end = time.time()
-    print('block 5 = ', end-start, ' s')
-    start = time.time()
+    
     if mc_assn == None:
         labels_noise = np.array(labels_noise_list)[accepted_candidates_mask]
         dataword = np.array(dataword)[noise_samples_mask][accepted_candidates_mask]
@@ -463,60 +379,14 @@ def analysis(file,pixel_xy,sel_start=0, sel_end=-1,use_veto=False,time_window=0,
         gain = gain[noise_samples_mask][accepted_candidates_mask]
     else:
         dataword = np.array(dataword)
-    end = time.time()
-    print('block 6 = ', end-start, ' s')
-    #print('Time to use masks = ', end-start, ' s')
+    
     all_charge_array = np.zeros_like(np.unique(labels_noise),dtype='float')
-    start = time.time()
+    
     # build charge events out of 39Ar candidates
     nqtxyz = build_charge_events(labels_noise,dataword,all_charge_array,txyz_noise,\
                 v_ref=v_ref,v_cm=v_cm,v_ped=v_ped,gain=gain)
-    end = time.time()
-    print('block 7 = ', end-start, ' s')
-    #charge_from_event = nqtxyz[:,1]
-    #charge_from_event = charge_from_event[charge_from_event != 0]
-    return nqtxyz #, txyz, txyz_noise
 
- 
-def analysis_test(file,pixel_xy,sel_start=0, sel_end=-1,use_veto=False,time_window=0,space_window=0):
-    ts, packets, mc_assn = getPackets(file, sel_start, sel_end)
-    dataword = packets['dataword']
-    # zip up y, z, and t values for clustering
-    txyz = zip_pixel_tyz(packets,ts, pixel_xy)
-
-    # cluster to find cosmic tracks
-    eps_cosmics = 20
-    min_samples_cosmics = 5
-    # cluster packets to find track-like charge events
-    txyz_core, txyz_noise, txyz_noncore, db = cluster_packets(eps_cosmics, min_samples_cosmics, txyz)
-    labels_cosmics = np.array(db.labels_)
-    labels_cosmics = labels_cosmics[labels_cosmics != -1]
-    packets_per_cluster_cosmics = np.bincount(labels_cosmics)
-    cluster_ids_cosmics = np.unique(labels_cosmics)
-    packets_per_cluster_cosmics = packets_per_cluster_cosmics[packets_per_cluster_cosmics != 0]
-
-    # cluster the noise from cosmics clustering to find 39Ar candidates
-    eps_noise = 20
-    min_samples_noise = 1
-    txyz_core, txyz_noise_2, txyz_noncore, db_noise = cluster_packets(eps_noise, min_samples_noise,txyz_noise)
-    labels_noise = np.array(db_noise.labels_)
-    labels_noise = labels_noise[labels_noise != -1]
-    packets_per_cluster_noise = np.bincount(labels_noise)
-    cluster_ids_noise = np.unique(labels_noise)
-    packets_per_cluster_noise = packets_per_cluster_noise[packets_per_cluster_noise != 0]
-
-    # one step
-    eps_onestep = 20
-    min_samples_onestep = 1
-    # cluster packets to find track-like charge events
-    txyz_core, txyz_onestep_noise, txyz_noncore, db_onestep = cluster_packets(eps_onestep, min_samples_onestep, txyz)
-    labels_onestep = np.array(db_onestep.labels_)
-    labels_onestep = labels_onestep[labels_onestep != -1]
-    packets_per_cluster_onestep = np.bincount(labels_onestep)
-    cluster_ids_onestep = np.unique(labels_onestep)
-    packets_per_cluster_onestep = packets_per_cluster_onestep[packets_per_cluster_onestep != 0]
-
-    return cluster_ids_cosmics, packets_per_cluster_cosmics, cluster_ids_noise, packets_per_cluster_noise,cluster_ids_onestep, packets_per_cluster_onestep
+    return nqtxyz
 
 def remove_tracks(file,pixel_xy,sel_start=0, sel_end=-1):
     ts, packets, mc_assn = getPackets(file, sel_start, sel_end)
