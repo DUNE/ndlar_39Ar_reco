@@ -10,6 +10,8 @@ v_pedestal_sim = 580 # make sure it is the same as in larnd-sim
 v_cm_data = 288.28125
 v_ref_data = 1300.78125
 
+#: Number of ADC counts
+ADC_COUNTS = 2**8
 
 #gain_sim = 0.004 # mV/e-
 gain_sim = 1/221
