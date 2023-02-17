@@ -1,0 +1,26 @@
+# set values for simulation (copy from larnd-sim)
+#v_cm_sim = 288 # mV
+#v_pedestal_sim = 580 
+#v_ref_sim = 1300 
+
+v_cm_sim = 288.28125
+v_ref_sim = 1300.78125
+v_pedestal_sim = 580 # make sure it is the same as in larnd-sim
+
+v_cm_data = 288.28125
+v_ref_data = 1300.78125
+
+
+#gain_sim = 0.004 # mV/e-
+gain_sim = 1/221
+gain_data = 1/221 # mV/e-
+
+# DBSCAN parameters
+eps_tracks = 20 ## mm
+min_samples_tracks = 8
+
+eps_noise = 10 ## mm
+min_samples_noise = 1
+
+
+
