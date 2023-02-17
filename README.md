@@ -2,7 +2,7 @@
 
 This repository contains code for reconstructing point-like energy deposits in ND-LAr prototypes data and simulations. At the moment, the code only supports Module-0. There is a fork of larnd-sim (ND-LAr simulation software) that allows for using the LAr NEST model for recombination, which may be more relevant for very low energy events like 39Ar beta decays. The repository (and code) is still a work in-progress.
 
-Currently, the code starts out by using DBSCAN to cluster hits to find tracks. Then the tracks are "thrown away" and a second-round of clustering is performed on the hits that remain (non-track-like clusters) to find small clusters of hits. What results is many clusters of a few hits (depending on the clustering). The ADCs of the hits are converted to charge and summed within clusters. 
+Currently, the code starts out by using DBSCAN to cluster hits to find tracks. Then the tracks are "thrown away" and a second-round of clustering is performed on the hits that remain (non-track-like clusters) to find small clusters of hits. What results is many clusters of a few hits (depending on the clustering). The ADCs of the hits are converted to charge and summed within clusters. The results are saved to an h5py file.
 
 Things I'm working on implementing:
 1. Output the results of the reconstruction to a light-weight h5py file
@@ -27,6 +27,8 @@ python3 reco/reco.py \
 
 A selection of the packets data is made to run the reconstruction on a small range of data. This is a temporary method, I'll update with a better way.
 
-You can find my larnd-sim fork here:
+LArNDLE needs a dictionary that can retrieve the pixel positions corresponding to larpix hits. This dictionary is taken in the form of a pickle file, which is made with `larpix_readout_parser` (https://github.com/YifanC/larpix_readout_parser). Look in the `layout` folder, because there might already be the one you need there (for example, multi_tile_layout-2.3.16.pkl is for module-0).
+
+You can find my larnd-sim fork here, if you want to use the NEST model for recombination:
 https://github.com/sam-fogarty/larnd-sim_beta-decays
 Note that larnd-sim is not a dependency of LArNDLE. But you may install larnd-sim to produce simulation samples to run through LArNDLE. In that case, you don't have to use my fork unless you want the option to use the NEST model.
