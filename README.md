@@ -16,16 +16,16 @@ cd LArNDLE
 pip install .
 ```
 
-To run the reconstruction in command-line, you can run:
+Here is an example of running the reconstruction in command-line:
 
 ```python
 python3 reco/reco.py \
 --input_packets_filename=datalog_2021_04_04_00_41_40_CEST.h5 \
---selection_start=0 \
---selection_end=10000 \
+--output_events_filename=datalog_2021_04_04_00_41_40_CEST_events.h5 \\
+--nSec=60
 ```
 
-A selection of the packets data is made to run the reconstruction on a small range of data. This is a temporary method, I'll update with a better way.
+nSec is the number of seconds of data to process. Each second of data (between PPS pulses) is processed individually and the results (events) are all concatenated together.
 
 LArNDLE needs a dictionary that can retrieve the pixel positions corresponding to larpix hits. This dictionary is taken in the form of a pickle file, which is made with `larpix_readout_parser` (https://github.com/YifanC/larpix_readout_parser). Look in the `layout` folder, because there might already be the one you need there (for example, multi_tile_layout-2.3.16.pkl is for module-0).
 
