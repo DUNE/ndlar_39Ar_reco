@@ -83,8 +83,8 @@ def pedestal_and_config(unique_ids, mc_assn):
     # Returns:
     #   v_ped, v_cm, v_ref, gain arrays; size of packets dataset
 
-    pedestal_file = 'datalog_2021_04_02_19_00_46_CESTevd_ped.json'
-    config_file = 'evd_config_21-03-31_12-36-13.json'
+    pedestal_file = 'pedestal/datalog_2021_04_02_19_00_46_CESTevd_ped.json'
+    config_file = 'config/evd_config_21-03-31_12-36-13.json'
 
     config_dict = defaultdict(lambda: dict(
         vref_mv=1300,
