@@ -17,7 +17,6 @@ def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
     # Inputs:
     #   adcs: array of packet ADC counts
     #   v_ref, v_cm, v_ped, gain: array of pixel calibration parameters
-    #   indices: array of indices
     # Outputs:
     #   array of charge in ke- 
     charge = (adcs.astype('float64')/float(ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)/gain * 1e-3
@@ -28,12 +27,13 @@ def timestamp_corrector(packets, mc_assn):
     # (from module0_flow timestamp_corrector.py)
     ts = packets['timestamp'].astype('f8')
 
-    if mc_assn == None:
-        timestamp_cut = (packets['timestamp'] > 2e7) | (packets['timestamp'] < 1e6)
-        ts = ts[np.invert(timestamp_cut)]
-        packets = packets[np.invert(timestamp_cut)]
-
-    if mc_assn == None:
+    if mc_assn == None and timestamp_cut:
+        # cut needed for module0 data, due to noisy packets too close to PPS pulse
+        timestamp_data_cut = (packets['timestamp'] > 2e7) | (packets['timestamp'] < 1e6)
+        ts = ts[np.invert(timestamp_data_cut)]
+        packets = packets[np.invert(timestamp_data_cut)]
+    
+    if mc_assn == None and PACMAN_clock_correction:
         # only supports module-0
         correction1 = [-9.597, 4.0021e-6]
         correction2 = [-9.329, 1.1770e-6]
@@ -41,34 +41,42 @@ def timestamp_corrector(packets, mc_assn):
         mask_io2 = packets['io_group'] == 2
         ts[mask_io1] = (packets[mask_io1]['timestamp'].astype('f8') - correction1[0]) / (1. + correction1[1])
         ts[mask_io2] = (packets[mask_io2]['timestamp'].astype('f8') - correction2[0]) / (1. + correction2[1])
-
+    
     # correct for timestamp rollovers (PPS)
-    rollover_ticks = 1e7
-    rollover_io1 = np.zeros(packets.shape[0], dtype = int)
-    rollover_io2 = np.zeros(packets.shape[0], dtype = int)
-
-    #Check for rollovers
-    rollover_io1[(packets['io_group'] == 1) & (packets['packet_type'] == 6) & (packets['trigger_type'] == 83)] = rollover_ticks
-    rollover_io2[(packets['io_group'] == 2) & (packets['packet_type'] == 6) & (packets['trigger_type'] == 83)] = rollover_ticks
-
-    #Reset the rollover arrays
-    rollover_io1 = np.cumsum(rollover_io1)
-    rollover_io2 = np.cumsum(rollover_io2)
+    #rollover_ticks = 1e7
+    #rollover_io1 = np.zeros(packets.shape[0], dtype = int)
+    #rollover_io2 = np.zeros(packets.shape[0], dtype = int)
+    #
+    #rollover_io1[(packets['io_group'] == 1) & (packets['packet_type'] == 6) & (packets['trigger_type'] == 83)] = rollover_ticks
+    #rollover_io2[(packets['io_group'] == 2) & (packets['packet_type'] == 6) & (packets['trigger_type'] == 83)] = rollover_ticks
+    #
+    #rollover_io1 = np.cumsum(rollover_io1)
+    #rollover_io2 = np.cumsum(rollover_io2)
     
     #Apply the rollovers to ts
-    ts[(packets['io_group'] == 1) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) < 0)] += rollover_io1[(packets['io_group'] == 1) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) < 0)] - rollover_ticks
-    ts[(packets['io_group'] == 1) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) > 0)] += rollover_io1[(packets['io_group'] == 1) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) > 0)]
-    ts[(packets['io_group'] == 2) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) < 0)] += rollover_io2[(packets['io_group'] == 2) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) < 0)] - rollover_ticks
-    ts[(packets['io_group'] == 2) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) > 0)] += rollover_io2[(packets['io_group'] == 2) & (packets['packet_type'] == 0) & (packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int) > 0)]
+    #packet_type_0 = packets['packet_type'] == 0
+    #packets_io1 = packets['io_group'] == 1
+    #packets_io2 = packets['io_group'] == 2
+    #packets_receipt_diff = packets['receipt_timestamp'].astype(int) - packets['timestamp'].astype(int)
+    
+    #ts[(packets_io1) & (packet_type_0) & (packets_receipt_diff < 0)] \
+    #    += rollover_io1[(packets_io1) & (packet_type_0) & (packets_receipt_diff < 0)] - rollover_ticks
+    #ts[(packets_io1) & (packet_type_0) & (packets_receipt_diff > 0)] \
+    #    += rollover_io1[(packets_io1) & (packet_type_0) & (packets_receipt_diff > 0)]
+    #ts[(packets_io2) & (packet_type_0) & (packets_receipt_diff < 0)] \
+    #    += rollover_io2[(packets_io2) & (packet_type_0) & (packets_receipt_diff < 0)] - rollover_ticks
+    #ts[(packets_io2) & (packet_type_0) & (packets_receipt_diff > 0)] \
+    #    += rollover_io2[(packets_io2) & (packet_type_0) & (packets_receipt_diff > 0)]
     
     packet_type_0 = packets['packet_type'] == 0
     ts = ts[packet_type_0]
     packets = packets[packet_type_0]
     
-    sorted_idcs = np.argsort(ts)
-    ts_corr_sorted = ts[sorted_idcs]
-    packets_sorted = packets[sorted_idcs]
-    return ts_corr_sorted, packets_sorted
+    #sorted_idcs = np.argsort(ts)
+    #ts_corr_sorted = ts[sorted_idcs]
+    #packets_sorted = packets[sorted_idcs]
+    #return ts_corr_sorted, packets_sorted
+    return ts, packets
 
 def pedestal_and_config(unique_ids, mc_assn):
     # function to open the pedestal and configuration files to get the dictionaries

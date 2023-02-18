@@ -78,8 +78,8 @@ def build_charge_events(labels_noise_list,dataword,txyz,v_ref,v_cm,v_ped,gain):
     nqtxyz['z'] = z_vals/n_vals
     return nqtxyz
 
-def analysis(file,pixel_xy,sel_start=0, sel_end=-1):
-    ts, packets, mc_assn = getPackets(file, sel_start, sel_end)
+def analysis(packets, pixel_xy, mc_assn):
+    ts, packets = timestamp_corrector(packets, mc_assn)
     dataword = packets['dataword']
     # zip up y, z, and t values for clustering
     txyz = zip_pixel_tyz(packets,ts, pixel_xy)

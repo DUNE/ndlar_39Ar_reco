@@ -6,23 +6,6 @@ def load_geom_dict(geom_dict_path):
         geom_dict = pickle.load(f_geom_dict)
     return geom_dict
 
-def getPackets(file, sel_start, sel_end):
-    #packets = packets[packets['valid_parity'] == 1]
-    mc_assn=None
-    try:
-        mc_assn = file['mc_packets_assn']
-    except:
-        mc_assn=None
-    
-    # load packets and make selection
-    packets = file['packets']
-    if sel_end == -1:
-        sel_end = len(packets)
-    packets = packets[sel_start:sel_end]
-    ts, packets = timestamp_corrector(packets, mc_assn)
-
-    return ts, packets, mc_assn
-
 def zip_pixel_tyz(packets,ts, pixel_xy):
     v_drift = 1.6 # mm/us, 500V/cm
     ts_inmm = v_drift*ts*0.1 # timestamp in us * drift speed in mm/us

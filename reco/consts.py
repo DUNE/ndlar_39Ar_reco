@@ -24,5 +24,8 @@ min_samples_tracks = 8
 eps_noise = 10 ## mm
 min_samples_noise = 1
 
+# Toggles for cuts and calibrations
+timestamp_cut = True
+PACMAN_clock_correction = True
 
 
