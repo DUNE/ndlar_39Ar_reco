@@ -2,7 +2,8 @@
 """
 Command-line interface to LArNDLE
 """
-import reco_fxns
+from build_events import *
+from preclustering import *
 import h5py
 import fire
 import time
@@ -10,7 +11,7 @@ import time
 def run_reconstruction(input_packets_filename, selection_start, selection_end):
 
     dict_path = 'layout/multi_tile_layout-2.3.16.pkl'
-    pixel_xy = reco_fxns.load_geom_dict(dict_path)
+    pixel_xy = load_geom_dict(dict_path)
     
     print('Opening packets file: ', input_packets_filename)
     print('Selecting packets ', selection_start, ' to ', selection_end)
@@ -27,7 +28,7 @@ def run_reconstruction(input_packets_filename, selection_start, selection_end):
     
     analysis_start = time.time()
     # outputs nqtxyz: nhit, charge, time since file start, x (mm) of hits, y (mm) of hits, z (mm) of hits; for events
-    results = reco_fxns.analysis(f_packets,pixel_xy,sel_start=selection_start,sel_end=selection_end,cut=False)
+    results = analysis(f_packets,pixel_xy,sel_start=selection_start,sel_end=selection_end)
     
     packets_filename_base = input_packets_filename.split('.h5')[0]
     output_events_filename = packets_filename_base + '_events.h5'
