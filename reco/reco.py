@@ -15,7 +15,6 @@ def run_reconstruction(input_packets_filename, output_events_filename, nSec):
     packets_filename_base = input_packets_filename.split('.h5')[0]
     if os.path.exists(output_events_filename):
         raise Exception('Output file '+ str(output_events_filename) + ' already exists.')
-    
     if nSec <= 0 or nSec - int(nSec) > 0:
         raise ValueError('nSec must be greater than zero and be an integer.')
     if input_packets_filename.split('.')[-1] != 'h5':
@@ -33,7 +32,7 @@ def run_reconstruction(input_packets_filename, output_events_filename, nSec):
         raise KeyError('Packets not found in ' + input_packets_filename)
     
     analysis_start = time.time()
-    # outputs nqtxyz: nhit, charge, time since file start, x (mm) of hits, y (mm) of hits, z (mm) of hits; for events
+    # outputs: nhit, charge, time since file start, x (mm) of hits, y (mm) of hits, z (mm) of hits; for events
     mc_assn=None
     try:
         mc_assn = f_packets['mc_packets_assn']
@@ -74,17 +73,21 @@ def run_reconstruction(input_packets_filename, output_events_filename, nSec):
         else:
             mc_assn_1sec = None
         if sec == 1:
-            results = analysis(packets_1sec, pixel_xy, mc_assn_1sec)
+            results_small_clusters, results_large_clusters = analysis(packets_1sec, pixel_xy, mc_assn_1sec)
         elif sec > 1:
-            results = np.concatenate((results, analysis(packets_1sec, pixel_xy, mc_assn_1sec)))
+            results_small_clusters_temp, results_large_clusters_temp = analysis(packets_1sec, pixel_xy, mc_assn_1sec)
+            results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
+            results_large_clusters = np.concatenate((results_large_clusters, results_large_clusters_temp))
     
     print('Saving events to ', output_events_filename)
     with h5py.File(output_events_filename, 'w') as f:
-        dset = f.create_dataset('small_clusters', data=results, dtype=results.dtype)
+        dset_small_clusters = f.create_dataset('small_clusters', data=results_small_clusters, dtype=results_small_clusters.dtype)
+        dset_large_clusters = f.create_dataset('large_clusters', data=results_large_clusters, dtype=results_large_clusters.dtype)
     
     analysis_end = time.time()
     print('Time to do full analysis = ', analysis_end-analysis_start, ' seconds')
-    print('Total clusters = ', len(results))
+    print('Total small clusters = ', len(results_small_clusters), ' with a rate of ', len(results_small_clusters)/nSec, ' Hz')
+    print('Total large clusters = ', len(results_large_clusters), ' with a rate of ', len(results_large_clusters)/nSec, ' Hz')
 
 if __name__ == "__main__":
     fire.Fire(run_reconstruction)

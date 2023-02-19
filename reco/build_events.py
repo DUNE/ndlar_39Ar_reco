@@ -13,23 +13,21 @@ def cluster_packets(eps,min_samples,txyz):
     ### Cluster packets into charge events
     # INPUT: DBSCAN parameters (eps: mm; min_samples: int), packet txyz list
     # OUTPUT: txyz values for core, noise, and noncore samples. And returns DBSCAN fit db.
-    start = time.time()
     db = DBSCAN(eps=eps, min_samples=min_samples).fit(txyz) 
-    txyz = np.array(txyz)
     # core samples
     core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
     core_samples_mask[db.core_sample_indices_] = True
     txyz_coresamples = np.array(txyz)[core_samples_mask]
     # noise samples
     noise_samples_mask = db.labels_ == -1
-    txyz_noise = txyz[noise_samples_mask]
+    txyz_noise = np.array(txyz)[noise_samples_mask]
     # non-core samples
     coreplusnoise_samples_mask = core_samples_mask + noise_samples_mask
     noncore_samples_mask = np.invert(coreplusnoise_samples_mask)
-    txyz_noncoresamples = txyz[noncore_samples_mask]
+    txyz_noncoresamples = np.array(txyz)[noncore_samples_mask]
     return txyz_coresamples, txyz_noise, txyz_noncoresamples,db
 
-def build_charge_events(labels_noise_list,dataword,txyz,v_ref,v_cm,v_ped,gain):
+def build_charge_events(labels,dataword,txyz,v_ref,v_cm,v_ped,gain):
     ### Build charge events by adding up packet charge from individual DBSCAN clusters
     # Inputs: 
     #   labels_noise_list: list of noise labels from DBSCAN
@@ -40,28 +38,26 @@ def build_charge_events(labels_noise_list,dataword,txyz,v_ref,v_cm,v_ped,gain):
     #   nqtxyz: array containing event information
 
     charge = adcs_to_ke(dataword, v_ref,v_cm,v_ped,gain)
-    labels_noise = np.array(labels_noise_list)
-
-    q_vals = np.bincount(labels_noise, weights=charge)
+    q_vals = np.bincount(labels, weights=charge)
     txyz = np.array(txyz)
     #print('length of txyz = ', len(txyz))
 
     # find midpoint of clustered hits and save array of all event information
-    n_vals = np.bincount(labels_noise)
-
-    t_vals = np.bincount(labels_noise, weights=txyz[:,0])[n_vals != 0] # add up x values of hits in cluster then avg
-    x_vals = np.bincount(labels_noise, weights=txyz[:,1])[n_vals != 0]
-    y_vals = np.bincount(labels_noise, weights=txyz[:,2])[n_vals != 0]
-    z_vals = np.bincount(labels_noise, weights=txyz[:,3])[n_vals != 0]
+    n_vals = np.bincount(labels)
+    t_vals = np.bincount(labels, weights=txyz[:,0])[n_vals != 0] # add up x values of hits in cluster then avg
+    x_vals = np.bincount(labels, weights=txyz[:,1])[n_vals != 0]
+    y_vals = np.bincount(labels, weights=txyz[:,2])[n_vals != 0]
+    z_vals = np.bincount(labels, weights=txyz[:,3])[n_vals != 0]
     q_vals = q_vals[n_vals != 0]
     n_vals = n_vals[n_vals != 0] # get rid of n_vals that are 0, otherwise get divide by 0 later
     
-    t_vals = t_vals[q_vals != 0]
-    x_vals = x_vals[q_vals != 0]
-    y_vals = y_vals[q_vals != 0]
-    z_vals = z_vals[q_vals != 0]
-    n_vals = n_vals[q_vals != 0]
-    q_vals = q_vals[q_vals != 0]
+    q_vals_not_0 = q_vals != 0
+    t_vals = t_vals[q_vals_not_0]
+    x_vals = x_vals[q_vals_not_0]
+    y_vals = y_vals[q_vals_not_0]
+    z_vals = z_vals[q_vals_not_0]
+    n_vals = n_vals[q_vals_not_0]
+    q_vals = q_vals[q_vals_not_0]
     
     # for track-like events
     #labels_tracks = np.array(labels_cosmics)
@@ -69,14 +65,14 @@ def build_charge_events(labels_noise_list,dataword,txyz,v_ref,v_cm,v_ped,gain):
     #n_vals_tracks = np.bincount(labels_cosmics)
     
     event_dtype = np.dtype([('nhit', '<u1'), ('q', '<f8'),('t', '<f8'),('x', '<f8'),('y', '<f8'),('z', '<f8')])
-    nqtxyz = np.zeros((len(n_vals[n_vals != 0]),), dtype=event_dtype)
-    nqtxyz['nhit'] = n_vals
-    nqtxyz['q'] = q_vals
-    nqtxyz['t'] = t_vals/n_vals # average for each event
-    nqtxyz['x'] = x_vals/n_vals
-    nqtxyz['y'] = y_vals/n_vals
-    nqtxyz['z'] = z_vals/n_vals
-    return nqtxyz
+    results = np.zeros((len(n_vals[n_vals != 0]),), dtype=event_dtype)
+    results['nhit'] = n_vals
+    results['q'] = q_vals
+    results['t'] = t_vals/n_vals # average for each event
+    results['x'] = x_vals/n_vals
+    results['y'] = y_vals/n_vals
+    results['z'] = z_vals/n_vals
+    return results
 
 def analysis(packets, pixel_xy, mc_assn):
     ts, packets = timestamp_corrector(packets, mc_assn)
@@ -86,44 +82,51 @@ def analysis(packets, pixel_xy, mc_assn):
     v_ped, v_cm, v_ref, gain = calibrations(packets, mc_assn)
 
     # cluster packets to find track-like charge events
-    labels_cosmics, labels_noise, labels_noise_list, accepted_candidates_mask,txyz_noise = 0,0,0,0,0
     #### this block is slow
-    if mc_assn == None:
-        txyz_core, txyz_noise, txyz_noncore, db = cluster_packets(eps_tracks, min_samples_tracks, txyz)
-        labels_cosmics = db.labels_
-        
-        # packet coordinates for DBSCAN noise
-        candidate_t = txyz_noise[:,0]
-        candidate_x = txyz_noise[:,1]
-        candidate_y = txyz_noise[:,2]
-        candidate_z = txyz_noise[:,3]
-        
-        # cluster packets that remain after tracks have been removed
-        txyz_core, txyz_noise_2, txyz_noncore, db_noise = cluster_packets(eps_noise, min_samples_noise,txyz_noise)
-        labels_noise = db_noise.labels_
-        labels_noise_list = list(labels_noise)
-        noise_samples_mask = db.labels_ == -1
-        #tracks_samples_mask = db.labels != -1
-    else:
-        txyz_core, txyz_noise_2, txyz_noncore, db_noise = cluster_packets(eps_noise, min_samples_noise,txyz)
-        labels_noise = db_noise.labels_
-        labels_noise_list = list(labels_noise)
-        txyz_noise = txyz
-        #noise_samples_mask = db.labels_ == -1
+    #if mc_assn == None:
+    txyz_core_tracks, txyz_noise_tracks, txyz_noncore_tracks, db = cluster_packets(eps_tracks, min_samples_tracks, txyz)
+    labels_tracks = db.labels_
     
-    if mc_assn == None:
-        labels_noise = np.array(labels_noise_list)
-        dataword = np.array(dataword)[noise_samples_mask]
-        #dataword_tracks = np.array(dataword)[tracks_samples_mask]
-        v_ref = v_ref[noise_samples_mask]
-        v_cm = v_cm[noise_samples_mask]
-        v_ped = v_ped[noise_samples_mask]
-        gain = gain[noise_samples_mask]
-    else:
-        dataword = np.array(dataword)
+    # cluster packets that remain after tracks have been removed
+    txyz_core_small_clusters, txyz_noise_small_clusters, txyz_noncore_small_clusters, db_small_clusters = \
+        cluster_packets(eps_noise, min_samples_noise,txyz_noise_tracks)
+    noise_samples_mask = db.labels_ == -1
+    #tracks_samples_mask = db.labels != -1
+    #else: # FIXME: Should do the track-level clustering here too. 
+    #    txyz_core_MC, txyz_noise_MC, txyz_noncore_MC, db_MC = cluster_packets(eps_noise, min_samples_noise,txyz)
+    #    labels_small_clusters = db_MC.labels_
+    #    txyz_noise = txyz
+    #    noise_samples_mask = db_MC.labels_ == -1
     
-    # build charge events out of 39Ar candidates
-    results = build_charge_events(labels_noise,dataword,txyz_noise,\
-                v_ref=v_ref,v_cm=v_cm,v_ped=v_ped,gain=gain)
+    #if mc_assn == None:
+    #    dataword = np.array(dataword)[noise_samples_mask]
+    #    v_ref = v_ref[noise_samples_mask]
+    #    v_cm = v_cm[noise_samples_mask]
+    #    v_ped = v_ped[noise_samples_mask]
+    #    gain = gain[noise_samples_mask]
+    #else:
+    #    dataword = np.array(dataword)
+    labels_small_clusters = db_small_clusters.labels_
+    dataword_small_clusters = np.array(dataword)[noise_samples_mask]
+    v_ref_small_clusters = v_ref[noise_samples_mask]
+    v_cm_small_clusters = v_cm[noise_samples_mask]
+    v_ped_small_clusters = v_ped[noise_samples_mask]
+    gain_small_clusters = gain[noise_samples_mask]
+    
+    # build charge events
+    results_small_clusters = build_charge_events(labels_small_clusters,dataword_small_clusters,txyz_noise_tracks,\
+                v_ref=v_ref_small_clusters,v_cm=v_cm_small_clusters,v_ped=v_ped_small_clusters,gain=gain_small_clusters)
+    
+    noise_samples_mask_inverted = np.invert(noise_samples_mask)
+    labels_large_clusters = labels_tracks[noise_samples_mask_inverted]
+    dataword_large_clusters = np.array(dataword)[noise_samples_mask_inverted]
+    txyz_large_clusters = np.array(txyz)[noise_samples_mask_inverted]
+    v_ref_large_clusters = v_ref[noise_samples_mask_inverted]
+    v_cm_large_clusters = v_cm[noise_samples_mask_inverted]
+    v_ped_large_clusters = v_ped[noise_samples_mask_inverted]
+    gain_large_clusters = gain[noise_samples_mask_inverted]
+    
+    results_large_clusters = build_charge_events(labels_large_clusters,dataword_large_clusters,txyz_large_clusters,\
+                v_ref=v_ref_large_clusters,v_cm=v_cm_large_clusters,v_ped=v_ped_large_clusters,gain=gain_large_clusters)
 
-    return results
+    return results_small_clusters, results_large_clusters
