@@ -22,16 +22,22 @@ def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
     charge = (adcs.astype('float64')/float(ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)/gain * 1e-3
     return charge
 
-def timestamp_corrector(packets, mc_assn):
+def timestamp_corrector(packets, mc_assn, unix):
     # Corrects larpix clock timestamps due to slightly different PACMAN clock frequencies 
     # (from module0_flow timestamp_corrector.py)
     ts = packets['timestamp'].astype('f8')
-
+    packet_type_0 = packets['packet_type'] == 0
+    ts = ts[packet_type_0]
+    packets = packets[packet_type_0]
+    if mc_assn != None:
+        mc_assn = mc_assn[packet_type_0]
+    
     if mc_assn == None and timestamp_cut:
         # cut needed for module0 data, due to noisy packets too close to PPS pulse
-        timestamp_data_cut = (packets['timestamp'] > 2e7) | (packets['timestamp'] < 1e6)
-        ts = ts[np.invert(timestamp_data_cut)]
-        packets = packets[np.invert(timestamp_data_cut)]
+        timestamp_data_cut = np.invert((packets['timestamp'] > 2e7) | (packets['timestamp'] < 1e6))
+        ts = ts[timestamp_data_cut]
+        packets = packets[timestamp_data_cut]
+        unix = unix[timestamp_data_cut]
     
     if mc_assn == None and PACMAN_clock_correction:
         # only supports module-0
@@ -68,15 +74,11 @@ def timestamp_corrector(packets, mc_assn):
     #ts[(packets_io2) & (packet_type_0) & (packets_receipt_diff > 0)] \
     #    += rollover_io2[(packets_io2) & (packet_type_0) & (packets_receipt_diff > 0)]
     
-    packet_type_0 = packets['packet_type'] == 0
-    ts = ts[packet_type_0]
-    packets = packets[packet_type_0]
-    
     #sorted_idcs = np.argsort(ts)
     #ts_corr_sorted = ts[sorted_idcs]
     #packets_sorted = packets[sorted_idcs]
     #return ts_corr_sorted, packets_sorted
-    return ts, packets
+    return ts, packets, mc_assn, unix
 
 def pedestal_and_config(unique_ids, mc_assn):
     # function to open the pedestal and configuration files to get the dictionaries

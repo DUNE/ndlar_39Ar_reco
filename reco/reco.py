@@ -60,11 +60,13 @@ def run_reconstruction(input_packets_filename, output_events_filename, nSec):
                 mc_assn_nextPPS = mc_assn[PPS_indices[sec-1]:PPS_indices[sec]]
         
         # remove packets from the 1sec that belongs in the previous second
-        packets_1sec_receipt_diff_mask = packets_1sec['receipt_timestamp'].astype(int) - packets_1sec['timestamp'].astype(int) < 0
+        packets_1sec_receipt_diff_mask = (packets_1sec['receipt_timestamp'].astype(int) - packets_1sec['timestamp'].astype(int) < 0)\
+                & (packets_1sec['packet_type'] == 0)
         packets_1sec = packets_1sec[np.invert(packets_1sec_receipt_diff_mask)]
         
         # move packets from nextPPS to 1sec that belong 1sec earlier
-        packets_nextPPS_receipt_diff_mask = packets_nextPPS['receipt_timestamp'].astype(int) - packets_nextPPS['timestamp'].astype(int) < 0
+        packets_nextPPS_receipt_diff_mask = (packets_nextPPS['receipt_timestamp'].astype(int) - packets_nextPPS['timestamp'].astype(int) < 0) \
+                & (packets_nextPPS['packet_type'] == 0)
         # move those packets from nextPPS to 1sec. Now we will only work on packets_1sec
         packets_1sec = np.concatenate((packets_1sec, packets_nextPPS[packets_nextPPS_receipt_diff_mask]))
         if mc_assn != None:
