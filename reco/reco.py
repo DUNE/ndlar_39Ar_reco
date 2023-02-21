@@ -10,13 +10,13 @@ import time
 import os
 from tqdm import tqdm
 
-def run_reconstruction(input_packets_filename, output_events_filename, nSec):
+def run_reconstruction(input_packets_filename, output_events_filename, nSec_start, nSec_end):
     
     packets_filename_base = input_packets_filename.split('.h5')[0]
     if os.path.exists(output_events_filename):
         raise Exception('Output file '+ str(output_events_filename) + ' already exists.')
-    if nSec <= 0 or nSec - int(nSec) > 0:
-        raise ValueError('nSec must be greater than zero and be an integer.')
+    if nSec_start <= 0 or nSec_start - int(nSec_start) or nSec_end <= 0 or nSec_end - int(nSec_end) > 0:
+        raise ValueError('nSec_start and nSec_end must be greater than zero and be an integer.')
     if input_packets_filename.split('.')[-1] != 'h5':
         raise Exception('Input file must be an h5 file.')
         
@@ -43,8 +43,9 @@ def run_reconstruction(input_packets_filename, output_events_filename, nSec):
     packets = f_packets['packets']
     PPS_indices = np.where((packets['packet_type'] == 6) & (packets['trigger_type'] == 83))[0]
     
-    print('Processing the first ', nSec, ' seconds of data...')
-    for sec in tqdm(range(1,int(nSec)+1),desc=" Seconds Processed: "):
+    print('Processing the first '+ str(nSec_end - nSec_start) + ' seconds of data, starting at '+\
+         str(nSec_start) + ' seconds and stopping at ', str(nSec_end) + ' ...')
+    for sec in tqdm(range(nSec_start,int(nSec_end)+1),desc=" Seconds Processed: "):
         # grab 1s at a time to analyze, plus the next 1s 
         if sec == 1:
             packets_1sec = packets[0:PPS_indices[sec-1]]
@@ -74,9 +75,9 @@ def run_reconstruction(input_packets_filename, output_events_filename, nSec):
             mc_assn_1sec = np.concatenate((mc_assn_1sec, mc_assn_nextPPS[packets_nextPPS_receipt_diff_mask]))
         else:
             mc_assn_1sec = None
-        if sec == 1:
+        if sec == nSec_start:
             results_small_clusters, results_large_clusters = analysis(packets_1sec, pixel_xy, mc_assn_1sec)
-        elif sec > 1:
+        elif sec > nSec_start:
             results_small_clusters_temp, results_large_clusters_temp = analysis(packets_1sec, pixel_xy, mc_assn_1sec)
             results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
             results_large_clusters = np.concatenate((results_large_clusters, results_large_clusters_temp))
@@ -88,8 +89,8 @@ def run_reconstruction(input_packets_filename, output_events_filename, nSec):
     
     analysis_end = time.time()
     print('Time to do full analysis = ', analysis_end-analysis_start, ' seconds')
-    print('Total small clusters = ', len(results_small_clusters), ' with a rate of ', len(results_small_clusters)/nSec, ' Hz')
-    print('Total large clusters = ', len(results_large_clusters), ' with a rate of ', len(results_large_clusters)/nSec, ' Hz')
+    print('Total small clusters = ', len(results_small_clusters), ' with a rate of ', len(results_small_clusters)/(nSec_end-nSec_start), ' Hz')
+    print('Total large clusters = ', len(results_large_clusters), ' with a rate of ', len(results_large_clusters)/(nSec_end - nSec_start), ' Hz')
 
 if __name__ == "__main__":
     fire.Fire(run_reconstruction)

@@ -102,17 +102,22 @@ def analysis(packets, pixel_xy, mc_assn):
     packets = packets[packets['packet_type'] != 6]
     if mc_assn != None:
         mc_assn = mc_assn[packets['packet_type'] != 6]
-    
+
     # assign a unix timestamp to each packet based on the timestamp of the previous packet type 4
     packet_type = packets['packet_type']
     packet_type4_mask = packet_type == 4
     timestamps = packets['timestamp'].astype('f8')
 
-    # Add a temporary packet type 4 at the end of the data selection
+    # Add a temporary packet type 4 at the end or start of the data selection
     if packet_type[-1] != 4:
         packet_type = np.concatenate((packet_type, np.array([4])))
         last_packet_type4_timestamp = timestamps[packet_type4_mask][-1]
         timestamps = np.concatenate((timestamps, np.array([last_packet_type4_timestamp])))
+        packet_type4_mask = packet_type == 4
+    if packet_type[0] != 4:
+        packet_type = np.concatenate((np.array([4]), packet_type))
+        first_packet_type4_timestamp = timestamps[packet_type4_mask][0]
+        timestamps = np.concatenate((np.array([first_packet_type4_timestamp]),timestamps))
         packet_type4_mask = packet_type == 4
         
     packet_type4_indices = np.where(packet_type4_mask)[0]
