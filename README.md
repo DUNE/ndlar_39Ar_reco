@@ -21,8 +21,9 @@ Here is an example of running the reconstruction in command-line:
 ```python
 python3 reco/reco.py \
 --input_packets_filename=datalog_2021_04_04_00_41_40_CEST.h5 \
---output_events_filename=datalog_2021_04_04_00_41_40_CEST_events.h5 \\
---nSec=60
+--output_events_filename=datalog_2021_04_04_00_41_40_CEST_events.h5 \
+--nSec_start=30 \
+--nSec_end = 60
 ```
 
 nSec is the number of seconds of data to process. Each second of data (between PPS pulses) is processed individually and the results (events) are all concatenated together. The output is an h5 files containing two datasets, `small_clusters` and `large_clusters`. The former will contain point-like events (few hits) while the latter contains larger cluster events (e.g. cosmic tracks). The data format will surely change slightly as the code continues to be developed.
