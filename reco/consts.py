@@ -28,4 +28,10 @@ min_samples_noise = 1
 timestamp_cut = True
 PACMAN_clock_correction = True
 
+# light
+adc_file_1 = '/Users/samuelfogarty/Desktop/mod0files.nosync/0a7a314c_20210404_004206.data'
+adc_file_2 = '/Users/samuelfogarty/Desktop/mod0files.nosync/0a7b54bd_20210404_004206.data'
+batch_size = 50 # how many events to load on each iteration
+
+
 

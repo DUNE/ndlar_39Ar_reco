@@ -121,10 +121,13 @@ def analysis(packets, pixel_xy, mc_assn):
         packet_type4_mask = packet_type == 4
         
     packet_type4_indices = np.where(packet_type4_mask)[0]
-    
     rep_count = np.diff(packet_type4_indices) # how many times to repeat the timestamp of each occurrance of packet type 4
     unix = np.repeat(timestamps[packet_type4_indices][:-1], rep_count) # repeat timestamps the corresponding # of times
+    unix_pt7 = unix[packet_type[:-1] == 7]
     unix = unix[packet_type[:-1] == 0]
+    timestamps_pt7 = timestamps[packet_type == 7]
+    #print('length of timestamps_pt7=', len(timestamps_pt7))
+    #print('length of unix_pt7 = ', len(unix_pt7))
     
     # apply a few PPS timestamp corrections, and select only data packets for analysis
     ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix)

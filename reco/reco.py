@@ -4,11 +4,13 @@ Command-line interface to LArNDLE
 """
 from build_events import *
 from preclustering import *
+from light import *
 import h5py
 import fire
 import time
 import os
 from tqdm import tqdm
+from adc64format import dtypes, ADC64Reader
 
 def run_reconstruction(input_packets_filename, output_events_filename, nSec_start, nSec_end):
     
@@ -38,11 +40,11 @@ def run_reconstruction(input_packets_filename, output_events_filename, nSec_star
         mc_assn = f_packets['mc_packets_assn']
     except:
         mc_assn=None
-        print("No 'mc_packets_assn' dataset found")
+        print("No 'mc_packets_assn' dataset found, processing as real data.")
     
     packets = f_packets['packets']
     PPS_indices = np.where((packets['packet_type'] == 6) & (packets['trigger_type'] == 83))[0]
-    
+
     print('Processing the first '+ str(nSec_end - nSec_start) + ' seconds of data, starting at '+\
          str(nSec_start) + ' seconds and stopping at ', str(nSec_end) + ' ...')
     for sec in tqdm(range(nSec_start,int(nSec_end)+1),desc=" Seconds Processed: "):
@@ -82,6 +84,9 @@ def run_reconstruction(input_packets_filename, output_events_filename, nSec_star
             results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
             results_large_clusters = np.concatenate((results_large_clusters, results_large_clusters_temp))
     
+    print('Loading light files with a batch size of ', batch_size, ' ...')
+    events_314C_all, events_54BD_all = read_light_files(nSec_start, nSec_end)
+
     print('Saving events to ', output_events_filename)
     with h5py.File(output_events_filename, 'w') as f:
         dset_small_clusters = f.create_dataset('small_clusters', data=results_small_clusters, dtype=results_small_clusters.dtype)
