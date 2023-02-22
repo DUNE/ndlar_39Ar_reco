@@ -23,7 +23,7 @@ def into_array(events_file, batch_size, event_dtype):
             events_ADC[j]['voltage'] = event_voltages
             
             event_header = events_file['header'][i]['unix']
-            events_ADC[j]['unix'] = event_header
+            events_ADC[j]['unix'] = event_header*1e-3
             j+=1
     return events_ADC
 
@@ -70,4 +70,42 @@ def read_light_files(nSec_start, nSec_end):
         pbar_54BD.close()
         print('Finished reading light data.')
     return events_314C_all, events_54BD_all
-            
+
+# match the light triggers to packet type 7s in the packets dataset
+def match(events, PPS_charge, unix_charge, label):
+    ## INPUT
+    # events: events array produced by read_light_files()
+    # PPS_charge: time since last PPS of each packet type 7
+    # unix_charge: unix time of each packet type 7
+
+    # loop through light triggers and match to packet type 7s
+    matched_triggers_unix = np.zeros_like(unix_charge, dtype=bool)
+    matched_triggers_PPS = np.zeros_like(unix_charge, dtype=bool)
+    indices = np.ones(len(events))*-1 # indices in the pkt type 7 unix/PPS arrays
+
+    for i in tqdm(range(len(events)), desc=' Matching ' + label + ' light triggers to packets: '):
+        light_unix = events[i]['unix']
+        PPS_light = events[i]['tai_ns']
+        #print(light_unix, ' ', np.unique(unix_charge)[2:5])
+        #print(PPS_light, ' ', np.max(PPS_charge))
+        unix_matched_trigger_mask = (unix_charge < light_unix + matching_tolerance_unix)\
+            & (unix_charge > light_unix - matching_tolerance_unix)
+        PPS_matched_trigger_mask = (PPS_charge < PPS_light + matching_tolerance_PPS) \
+            & (PPS_charge > PPS_charge - matching_tolerance_PPS)
+        unix_PPS_matched_trigger_mask = (unix_matched_trigger_mask) & (PPS_matched_trigger_mask)
+        #print(np.sum(unix_PPS_matched_trigger_mask))
+        trigger_index = np.where(unix_PPS_matched_trigger_mask)[0]
+        #print(trigger_index)
+        if len(trigger_index) == 1:
+            indices[i] = trigger_index 
+        matched_triggers_unix += unix_matched_trigger_mask
+        matched_triggers_PPS += PPS_matched_trigger_mask
+        matched_triggers = (matched_triggers_unix) & (matched_triggers_PPS)
+    print('Total matched triggers = ', np.sum(matched_triggers), ' out of ', len(unix_charge), ' total triggers.')
+    return matched_triggers, indices
+    
+#def find_matched_charge_events(events, indices, PPS_charge):
+#    # find charge events near light triggers
+#    events[]
+        
+        

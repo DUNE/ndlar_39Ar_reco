@@ -66,7 +66,7 @@ def build_charge_events(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix):
     #labels_tracks = labels_cosmics[labels_cosmics != -1]
     #n_vals_tracks = np.bincount(labels_cosmics)
     
-    event_dtype = np.dtype([('nhit', '<u8'), ('q', '<f8'),('t', '<f8'),('x', '<f8'),('y', '<f8'),('z', '<f8'),('unix', 'u8')])
+    event_dtype = np.dtype([('nhit', '<u8'), ('q', '<f8'),('t', '<f8'),('x', '<f8'),('y', '<f8'),('z', '<f8'),('unix', 'uint16')])
     results = np.zeros((len(n_vals[n_vals != 0]),), dtype=event_dtype)
     results['nhit'] = n_vals
     results['q'] = q_vals
@@ -125,7 +125,7 @@ def analysis(packets, pixel_xy, mc_assn):
     unix = np.repeat(timestamps[packet_type4_indices][:-1], rep_count) # repeat timestamps the corresponding # of times
     unix_pt7 = unix[packet_type[:-1] == 7]
     unix = unix[packet_type[:-1] == 0]
-    timestamps_pt7 = timestamps[packet_type == 7]
+    PPS_pt7 = timestamps[packet_type == 7]*0.1*1e3
     #print('length of timestamps_pt7=', len(timestamps_pt7))
     #print('length of unix_pt7 = ', len(unix_pt7))
     
@@ -190,4 +190,4 @@ def analysis(packets, pixel_xy, mc_assn):
                 v_ref=v_ref_large_clusters,v_cm=v_cm_large_clusters,v_ped=v_ped_large_clusters,gain=gain_large_clusters,\
                                                 unix=unix_large_clusters)
 
-    return results_small_clusters, results_large_clusters
+    return results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7

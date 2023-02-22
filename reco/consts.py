@@ -32,6 +32,7 @@ PACMAN_clock_correction = True
 adc_file_1 = '/Users/samuelfogarty/Desktop/mod0files.nosync/0a7a314c_20210404_004206.data'
 adc_file_2 = '/Users/samuelfogarty/Desktop/mod0files.nosync/0a7b54bd_20210404_004206.data'
 batch_size = 50 # how many events to load on each iteration
-
+matching_tolerance_unix = 1 # s
+matching_tolerance_PPS = 1e3 # ns
 
 

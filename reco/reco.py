@@ -78,14 +78,33 @@ def run_reconstruction(input_packets_filename, output_events_filename, nSec_star
         else:
             mc_assn_1sec = None
         if sec == nSec_start:
-            results_small_clusters, results_large_clusters = analysis(packets_1sec, pixel_xy, mc_assn_1sec)
+            results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7 = analysis(packets_1sec, pixel_xy, mc_assn_1sec)
         elif sec > nSec_start:
-            results_small_clusters_temp, results_large_clusters_temp = analysis(packets_1sec, pixel_xy, mc_assn_1sec)
+            results_small_clusters_temp, results_large_clusters_temp, unix_pt7_temp, PPS_pt7_temp = analysis(packets_1sec, pixel_xy, mc_assn_1sec)
             results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
             results_large_clusters = np.concatenate((results_large_clusters, results_large_clusters_temp))
+            unix_pt7 = np.concatenate((unix_pt7, unix_pt7_temp))
+            PPS_pt7 = np.concatenate((PPS_pt7, PPS_pt7_temp))
     
+    # loop through the light files and only select triggers within the second ranges specified
+    # note that not all these light events will have a match within the packets data selection
     print('Loading light files with a batch size of ', batch_size, ' ...')
-    events_314C_all, events_54BD_all = read_light_files(nSec_start, nSec_end)
+    events_314C_all, events_54BD_all = read_light_files(0, nSec_end)
+    # match light triggers to packet type 7's
+    matched_triggers_314C, indices_314C = match(events_314C_all, PPS_pt7, unix_pt7, '314C')
+    matched_triggers_54BD, indices_54BD = match(events_54BD_all, PPS_pt7, unix_pt7, '54BD')
+    # indices of light events to keep
+    light_event_indices_314C = np.where(indices_314C != -1)[0]
+    light_event_indices_54BD = np.where(indices_54BD != -1)[0]
+    # indices of pkt type 7's for each light event
+    indices_314C = indices_314C[indices_314C != -1]
+    indices_54BD = indices_54BD[indices_54BD != -1]
+    #print('index in pkt 7 array 314C = ', indices_314C[0:20])
+    #print('index in pkt 7 array 54BD = ', indices_54BD[0:20])
+    # exclude events where one ADC is not matched to charge data (probably won't happen?)
+    charge_indices = np.intersect1d(indices_314C, indices_54BD) 
+    light_event_indices = np.intersect1d(light_event_indices_314C, light_event_indices_54BD)
+    print(unix_pt7)
 
     print('Saving events to ', output_events_filename)
     with h5py.File(output_events_filename, 'w') as f:
