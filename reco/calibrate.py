@@ -22,10 +22,21 @@ def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
     charge = (adcs.astype('float64')/float(ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)/gain * 1e-3
     return charge
 
+def PACMAN_drift(packets):
+    # only supports module-0
+    ts = packets['timestamp'].astype('i8')
+    correction1 = [-9.597, 4.0021e-6]
+    correction2 = [-9.329, 1.1770e-6]
+    mask_io1 = packets['io_group'] == 1
+    mask_io2 = packets['io_group'] == 2
+    ts[mask_io1] = (packets[mask_io1]['timestamp'].astype('i8') - correction1[0]) / (1. + correction1[1])
+    ts[mask_io2] = (packets[mask_io2]['timestamp'].astype('i8') - correction2[0]) / (1. + correction2[1])
+    return ts
+    
 def timestamp_corrector(packets, mc_assn, unix):
     # Corrects larpix clock timestamps due to slightly different PACMAN clock frequencies 
     # (from module0_flow timestamp_corrector.py)
-    ts = packets['timestamp'].astype('f8')
+    ts = packets['timestamp'].astype('i8')
     packet_type_0 = packets['packet_type'] == 0
     ts = ts[packet_type_0]
     packets = packets[packet_type_0]
@@ -40,13 +51,7 @@ def timestamp_corrector(packets, mc_assn, unix):
         unix = unix[timestamp_data_cut]
     
     if mc_assn == None and PACMAN_clock_correction:
-        # only supports module-0
-        correction1 = [-9.597, 4.0021e-6]
-        correction2 = [-9.329, 1.1770e-6]
-        mask_io1 = packets['io_group'] == 1
-        mask_io2 = packets['io_group'] == 2
-        ts[mask_io1] = (packets[mask_io1]['timestamp'].astype('f8') - correction1[0]) / (1. + correction1[1])
-        ts[mask_io2] = (packets[mask_io2]['timestamp'].astype('f8') - correction2[0]) / (1. + correction2[1])
+        ts = PACMAN_drift(packets).astype('i8')
     
     # correct for timestamp rollovers (PPS)
     #rollover_ticks = 1e7

@@ -1,5 +1,6 @@
 import pickle
 from calibrate import timestamp_corrector
+from consts import *
 
 def load_geom_dict(geom_dict_path):
     with open(geom_dict_path, "rb") as f_geom_dict:
@@ -7,8 +8,7 @@ def load_geom_dict(geom_dict_path):
     return geom_dict
 
 def zip_pixel_tyz(packets,ts, pixel_xy):
-    v_drift = 1.6 # mm/us, 500V/cm
-    ts_inmm = v_drift*ts*0.1 # timestamp in us * drift speed in mm/us
+    ts_inmm = v_drift*1e1*ts*0.1 # timestamp in us * drift speed in mm/us
     txyz = []
     for i in range(len(packets)):
         try:

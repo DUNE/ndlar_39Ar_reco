@@ -29,10 +29,17 @@ timestamp_cut = True
 PACMAN_clock_correction = True
 
 # light
-adc_file_1 = '/Users/samuelfogarty/Desktop/mod0files.nosync/0a7a314c_20210404_004206.data'
-adc_file_2 = '/Users/samuelfogarty/Desktop/mod0files.nosync/0a7b54bd_20210404_004206.data'
+#adc_file_1 = '/Users/samuelfogarty/Desktop/mod0files.nosync/0a7a314c_20210404_004206.data'
+#adc_file_2 = '/Users/samuelfogarty/Desktop/mod0files.nosync/0a7b54bd_20210404_004206.data'
+adc_file_1 = '/sdf/group/neutrino/sfogarty/module0_files/light_data/0a7a314c_20210404_004206.data'
+adc_file_2 = '/sdf/group/neutrino/sfogarty/module0_files/light_data/0a7b54bd_20210404_004206.data'
 batch_size = 50 # how many events to load on each iteration
+
+# matching
 matching_tolerance_unix = 1 # s
 matching_tolerance_PPS = 1e3 # ns
+v_drift = 0.16 # cm/usec, 500V/cm
+drift_distance = 30.27 # cm
+
 
 
