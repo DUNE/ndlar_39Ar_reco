@@ -16,6 +16,7 @@ def cluster_packets(eps,min_samples,txyz):
     db = DBSCAN(eps=eps, min_samples=min_samples).fit(txyz) 
     # core samples
     core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+    
     core_samples_mask[db.core_sample_indices_] = True
     txyz_coresamples = np.array(txyz)[core_samples_mask]
     # noise samples
@@ -77,9 +78,11 @@ def build_charge_events_small_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gai
     results['z'] = z_vals/n_vals
     results['unix'] = (unix_vals/n_vals).astype('i8') # all of these hits should have the same unix anyway
     results['io_group'] = (io_group_vals/n_vals).astype('i4')
+    results['matched'] = np.zeros(len(n_vals), dtype='i4')
+    results['light_index'] = np.ones(len(n_vals), dtype='i4')*-1
     return results
 
-def build_charge_events_large_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix):
+def build_charge_events_large_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix,io_group):
     ### Build charge events by adding up packet charge from individual DBSCAN clusters
     # Inputs: 
     #   labels_noise_list: list of noise labels from DBSCAN
@@ -92,49 +95,52 @@ def build_charge_events_large_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gai
     charge = adcs_to_ke(dataword, v_ref,v_cm,v_ped,gain)
     q_vals = np.bincount(labels, weights=charge)
     txyz = np.array(txyz)
-
+    
+    timestamps = txyz[:,0]
+    indices_sorted = np.argsort(labels)
+    labels = labels[indices_sorted]
+    timestamps = timestamps[indices_sorted]
+    label_indices = np.concatenate(([0], np.flatnonzero(labels[:-1] != labels[1:])+1, [len(labels)]))
+    label_timestamps = np.split(timestamps, label_indices[1:-1])
+    min_timestamps = np.array([np.min(t) for t in label_timestamps], dtype='i8')
+    max_timestamps = np.array([np.max(t) for t in label_timestamps], dtype='i8')
+    
     # find midpoint of clustered hits and save array of all event information
     n_vals = np.bincount(labels)
     t_vals = np.bincount(labels, weights=txyz[:,0])[n_vals != 0] # add up x values of hits in cluster then avg
-    x_vals = np.bincount(labels, weights=txyz[:,1])[n_vals != 0]
-    y_vals = np.bincount(labels, weights=txyz[:,2])[n_vals != 0]
-    z_vals = np.bincount(labels, weights=txyz[:,3])[n_vals != 0]
+    io_group_vals = np.bincount(labels, weights=io_group)
     unix_vals = np.bincount(labels, weights=unix)[n_vals != 0]
     q_vals = q_vals[n_vals != 0]
     n_vals = n_vals[n_vals != 0] # get rid of n_vals that are 0, otherwise get divide by 0 later
     
     q_vals_not_0 = q_vals != 0
     t_vals = t_vals[q_vals_not_0]
-    x_vals = x_vals[q_vals_not_0]
-    y_vals = y_vals[q_vals_not_0]
-    z_vals = z_vals[q_vals_not_0]
     n_vals = n_vals[q_vals_not_0]
     q_vals = q_vals[q_vals_not_0]
     unix_vals = unix_vals[q_vals_not_0]
+    io_group_vals = io_group_vals[q_vals_not_0]
     
-    # for track-like events
-    #labels_tracks = np.array(labels_cosmics)
-    #labels_tracks = labels_cosmics[labels_cosmics != -1]
-    #n_vals_tracks = np.bincount(labels_cosmics)
-    
-    event_dtype = np.dtype([('nhit', '<i4'), ('q', '<f8')])
+    event_dtype = np.dtype([('nhit', '<i4'), ('q', '<f8'),('io_group', '<i4'),\
+                            ('t_max', '<i8'), ('t_min', '<i8'),\
+                            ('unix', '<i8'), ('matched', '<i4'), ('light_index', '<i4')])
     results = np.zeros((len(n_vals[n_vals != 0]),), dtype=event_dtype)
     results['nhit'] = n_vals
     results['q'] = q_vals
-    #results['t'] = (t_vals/n_vals).astype('i8') # average for each event
-    #results['x'] = x_vals/n_vals
-    #results['y'] = y_vals/n_vals
-    #results['z'] = z_vals/n_vals
-    #results['unix'] = (unix_vals/n_vals).astype('i8') # all of these hits should have the same unix anyway
+    results['unix'] = (unix_vals/n_vals).astype('i8') # all of these hits should have the same unix anyway
+    results['io_group'] = (io_group_vals/n_vals).astype('i4')
+    results['t_min'] = min_timestamps/(v_drift*1e1) * 1e3
+    results['t_max'] = max_timestamps/(v_drift*1e1) * 1e3
+    results['matched'] = np.zeros(len(n_vals), dtype='i4')
+    results['light_index'] = np.ones(len(n_vals), dtype='i4')*-1
     return results
-def analysis(packets, pixel_xy, mc_assn):
+def analysis(packets, pixel_xy, mc_assn, detector):
     if mc_assn != None:
         mc_assn = mc_assn[packets['packet_type'] != 6]
     packets = packets[packets['packet_type'] != 6]
     
     packet_type = packets['packet_type']
     # grab the PPS timestamps of pkt type 7s and correct for PACMAN clock drift
-    PPS_pt7 = PACMAN_drift(packets)[packet_type == 7].astype('i8')*1e-1*1e3 # ns
+    PPS_pt7 = PACMAN_drift(packets, detector)[packet_type == 7].astype('i8')*1e-1*1e3 # ns
     # assign a unix timestamp to each packet based on the timestamp of the previous packet type 4
     packet_type4_mask = packet_type == 4
     timestamps = packets['timestamp'].astype('i8')
@@ -146,13 +152,13 @@ def analysis(packets, pixel_xy, mc_assn):
     unix = unix_timestamps[packet_type == 0].astype('i8')
     
     # apply a few PPS timestamp corrections, and select only data packets for analysis
-    ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix)
+    ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix, detector)
     dataword = packets['dataword']
     io_group = packets['io_group']
     
     # zip up y, z, and t values for clustering
     txyz = zip_pixel_tyz(packets,ts, pixel_xy)
-    v_ped, v_cm, v_ref, gain = calibrations(packets, mc_assn)
+    v_ped, v_cm, v_ref, gain = calibrations(packets, mc_assn, detector)
     
     # cluster packets to find track-like charge events
     #### this block is slow(?)
@@ -189,11 +195,11 @@ def analysis(packets, pixel_xy, mc_assn):
     v_ped_large_clusters = v_ped[noise_samples_mask_inverted]
     gain_large_clusters = gain[noise_samples_mask_inverted]
     unix_large_clusters = unix[noise_samples_mask_inverted]
-    #io_group_large_clusters = io_group[noise_samples_mask_inverted]
+    io_group_large_clusters = io_group[noise_samples_mask_inverted]
     
     results_large_clusters = \
         build_charge_events_large_clusters(labels_large_clusters,dataword_large_clusters,txyz_large_clusters,\
         v_ref=v_ref_large_clusters,v_cm=v_cm_large_clusters,v_ped=v_ped_large_clusters,\
-        gain=gain_large_clusters, unix=unix_large_clusters)
+        gain=gain_large_clusters, unix=unix_large_clusters, io_group=io_group_large_clusters)
 
     return results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7

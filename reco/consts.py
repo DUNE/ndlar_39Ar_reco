@@ -1,11 +1,15 @@
-# set values for simulation (copy from larnd-sim)
+### set values calibration values for simulation
+# make sure these are the same as in larnd-sim
+
+## probably the default values
 #v_cm_sim = 288 # mV
 #v_pedestal_sim = 580 
 #v_ref_sim = 1300 
 
+# set to match data
 v_cm_sim = 288.28125
 v_ref_sim = 1300.78125
-v_pedestal_sim = 580 # make sure it is the same as in larnd-sim
+v_pedestal_sim = 580 
 
 v_cm_data = 288.28125
 v_ref_data = 1300.78125
@@ -17,6 +21,9 @@ ADC_COUNTS = 2**8
 gain_sim = 1/221
 gain_data = 1/221 # mV/e-
 
+### charge
+charge_data_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/charge_data/'
+
 # DBSCAN parameters
 eps_tracks = 20 ## mm
 min_samples_tracks = 8
@@ -27,17 +34,15 @@ min_samples_noise = 1
 # Toggles for cuts and calibrations
 timestamp_cut = True
 PACMAN_clock_correction = True
+use_charge_event_drift_window_cut = False
+use_pixel_plane_cut = False
 
 # light
-#adc_file_1 = '/Users/samuelfogarty/Desktop/mod0files.nosync/0a7a314c_20210404_004206.data'
-#adc_file_2 = '/Users/samuelfogarty/Desktop/mod0files.nosync/0a7b54bd_20210404_004206.data'
-adc_file_1 = '/sdf/group/neutrino/sfogarty/module0_files/light_data/0a7a314c_20210404_004206.data'
-adc_file_2 = '/sdf/group/neutrino/sfogarty/module0_files/light_data/0a7b54bd_20210404_004206.data'
+adc_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/light_data/'
 batch_size = 50 # how many events to load on each iteration
+do_match_of_charge_to_light = True
 
 # matching
-matching_tolerance_unix = 1 # s
-matching_tolerance_PPS = 1e3 # ns
 v_drift = 0.16 # cm/usec, 500V/cm
 drift_distance = 30.27 # cm
 
