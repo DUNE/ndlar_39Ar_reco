@@ -1,13 +1,8 @@
 *this repository is under-construction*
 
-This repository contains code for reconstructing point-like energy deposits in ND-LAr prototypes data and simulations. The code will also automatically find large clusters (e.g. cosmic tracks). At the moment, the code only supports Module-0. There is a fork of larnd-sim (ND-LAr simulation software) that allows for using the LAr NEST model for recombination, which may be more relevant for very low energy electrons, This repository and code are still a work in-progress.
+This repository contains code for reconstructing point-like energy deposits in ND-LAr prototypes data and simulations. The code will also automatically find large clusters (e.g. cosmic tracks). At the moment, the code only supports Module-0 and Module-3.
 
-Currently, the code starts out by using DBSCAN to cluster hits to find tracks. Then the tracks are "thrown away" and a second-round of clustering is performed on the hits that remain (non-track-like clusters) to find small clusters of hits. What results is many clusters of a few hits (depending on the clustering). The ADCs of the hits are converted to charge and summed within clusters. The results are saved to an h5py file for both small and large clusters. 
-
-Things I'm working on implementing:
-1. Output the results of the reconstruction to a light-weight h5py file
-2. Charge-light matching between the reconstructed charge events and light data
-3. Expand support for other single ND-LAr modules and the 2x2 Demonstrator
+Currently, the code starts out by using DBSCAN to cluster hits to find tracks. Thena second-round of clustering is performed on the hits that remain (non-track-like clusters, or hits that were not clustered in the first step) to find small clusters of hits. What results is many clusters of a few hits (depending on the clustering parameters). The ADCs of the hits are converted to charge and summed within clusters. The results are saved to an h5py file for both small and large clusters. Charge-light matching is implemented for small clusters and large clusters (can be toggled on or off in `consts.py`).
 
 To clone LArNDLE, run:
 ```bash
@@ -16,20 +11,18 @@ cd LArNDLE
 pip install .
 ```
 
-Here is an example of running the reconstruction in command-line:
+Here is an example of running the reconstruction in command-line, once cd'd into the `reco` directory:
 
 ```python
-python3 reco/reco.py \
---input_packets_filename=datalog_2021_04_04_00_41_40_CEST.h5 \
---output_events_filename=datalog_2021_04_04_00_41_40_CEST_events.h5 \
---nSec_start=30 \
---nSec_end = 60
+python3 reco.py moduleX.py
 ```
 
-nSec is the number of seconds of data to process. Each second of data (between PPS pulses) is processed individually and the results (events) are all concatenated together. The output is an h5 files containing two datasets, `small_clusters` and `large_clusters`. The former will contain point-like events (few hits) while the latter contains larger cluster events (e.g. cosmic tracks). The data format will surely change slightly as the code continues to be developed.
+`moduleX.py` is an input config file stored in the `input_config` directory. These files contain input variables for `reco.py`. This allows for easily running different configurations, especially when running a different detector (i.e., module-0,1,2,3 and 2x2). This code should mostly be agnostic to the different detectors at this point, but may need slight adjustments to work properly.
+
+The numbers of seconds of data to process is set in the input config file. Each second of data (between PPS pulses) is processed individually and the results (events) are concatenated together. The output is an h5 file containing four datasets, `small_clusters`, `large_clusters`, `small_clusters_matched_light`, and `large_clusters_matched_light`. `small_clusters` will contain point-like events (few hits) while `large_clusters` contains larger cluster events (e.g. cosmic tracks, large noise events). The matched light datasets contain light events, which includes unix and PPS timestamps, and all waveforms and channels. The corresponding charge datasets contain a `matched` parameter which is 0 if the charge event was not matched to a light event and 1 if it was. The `light_index` parameter contains the index of the matched light event within the corresponding light events dataset. So one can easily get the charge events associated with a specific light trigger. The data format will surely change slightly as the code continues to be developed. Note that light events not matched to a charge event are not saved in this file.
+
+Note that the matching tolerance values may need to be adjusted in order to ensure that the light triggers get matched to the external triggers (packet type 7's within the packets data). Once this matching has been done, we match light events to charge events based on the unix and PPS timestamps. In particular, by default they match if they're within 1s in unix and one drift window in PPS.
+
+There are a handful of data cuts available in `charge_event_cuts`.
 
 LArNDLE needs a dictionary that can retrieve the pixel positions corresponding to larpix hits. This dictionary is taken in the form of a pickle file, which is made with `larpix_readout_parser` (https://github.com/YifanC/larpix_readout_parser). Look in the `layout` folder, because there might already be the one you need there (for example, multi_tile_layout-2.3.16.pkl is for module-0).
-
-You can find my larnd-sim fork here, if you want to use the NEST model for recombination:
-https://github.com/sam-fogarty/larnd-sim_beta-decays
-Note that larnd-sim is not a dependency of LArNDLE. But you may install larnd-sim to produce simulation samples to run through LArNDLE. In that case, you don't have to use my fork unless you want the option to use the NEST model.
