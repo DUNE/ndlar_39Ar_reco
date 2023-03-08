@@ -48,14 +48,25 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, det
         else:
             mc_assn_1sec = None
         if sec == nSec_start:
-            results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7 = analysis(packets_1sec, pixel_xy, mc_assn_1sec, detector)
+            results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7,\
+                hits_small_clusters, hits_large_clusters = analysis(packets_1sec, pixel_xy, mc_assn_1sec, detector, 0, 0)
         elif sec > nSec_start:
-            results_small_clusters_temp, results_large_clusters_temp, unix_pt7_temp, PPS_pt7_temp = analysis(packets_1sec, pixel_xy, mc_assn_1sec, detector)
+            hits_small_clusters_max_cindex = np.max(hits_small_clusters['cluster_index'])+1
+            if np.size(hits_large_clusters['cluster_index']) > 0:
+                hits_large_clusters_max_cindex = np.max(hits_large_clusters['cluster_index'])+1
+            else:
+                hits_large_clusters_max_cindex = 0
+            results_small_clusters_temp, results_large_clusters_temp, unix_pt7_temp, PPS_pt7_temp,\
+                hits_small_clusters_temp,hits_large_clusters_temp = analysis(packets_1sec, pixel_xy, mc_assn_1sec, detector,\
+                                        hits_small_clusters_max_cindex, hits_large_clusters_max_cindex)
             results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
             results_large_clusters = np.concatenate((results_large_clusters, results_large_clusters_temp))
+            hits_small_clusters = np.concatenate((hits_small_clusters, hits_small_clusters_temp))
+            hits_large_clusters = np.concatenate((hits_large_clusters, hits_large_clusters_temp))
+            #print('length of hits small clusters: ', len(hits_small_clusters))
             unix_pt7 = np.concatenate((unix_pt7, unix_pt7_temp))
             PPS_pt7 = np.concatenate((PPS_pt7, PPS_pt7_temp))
-    return results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7
+    return results_small_clusters, results_large_clusters, unix_pt7,PPS_pt7, hits_small_clusters,hits_large_clusters
     
 def run_reconstruction(input_config_filename):
     ## main function to run reconstruction
@@ -142,12 +153,12 @@ def run_reconstruction(input_config_filename):
          str(nSec_start) + ' seconds and stopping at ', str(nSec_end) + ' ...')
     
     # run reconstruction
-    results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7 = \
+    results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7, hits_small_clusters,hits_large_clusters = \
         reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, detector)
     
     # do cuts on charge events. See toggles for cuts in consts.py.
     # if all toggles are False then this command simply returns `results` unchanged.
-    results_small_clusters = charge_event_cuts.all_charge_event_cuts(results_small_clusters)
+    #results_small_clusters = charge_event_cuts.all_charge_event_cuts(results_small_clusters)
     
     if do_match_of_charge_to_light:
         # loop through the light files and only select triggers within the second ranges specified
@@ -185,10 +196,12 @@ def run_reconstruction(input_config_filename):
     print('Saving events to ', output_events_filepath)
     with h5py.File(output_events_filepath, 'w') as f:
         dset_small_clusters = f.create_dataset('small_clusters', data=results_small_clusters, dtype=results_small_clusters.dtype)
+        dset_hits_small_clusters = f.create_dataset('small_clusters_hits', data=hits_small_clusters, dtype=hits_small_clusters.dtype)
         if do_match_of_charge_to_light:
             dset_light_events = f.create_dataset('small_clusters_matched_light', data=results_small_clusters_light_events, dtype=results_small_clusters_light_events.dtype)
             dset_light_events = f.create_dataset('large_clusters_matched_light', data=results_large_clusters_light_events, dtype=results_large_clusters_light_events.dtype)
         dset_large_clusters = f.create_dataset('large_clusters', data=results_large_clusters, dtype=results_large_clusters.dtype)
+        dset_hits_large_clusters = f.create_dataset('large_clusters_hits', data=hits_large_clusters, dtype=hits_large_clusters.dtype)
     
     analysis_end = time.time()
     print('Time to do full analysis = ', analysis_end-analysis_start, ' seconds')

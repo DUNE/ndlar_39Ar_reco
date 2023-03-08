@@ -25,7 +25,7 @@ gain_data = 1/221 # mV/e-
 charge_data_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/charge_data/'
 
 # DBSCAN parameters
-eps_tracks = 20 ## mm
+eps_tracks = 30 ## mm
 min_samples_tracks = 8
 
 eps_noise = 10 ## mm
