@@ -22,8 +22,8 @@ gain_sim = 1/221
 gain_data = 1/221 # mV/e-
 
 ### charge
-charge_data_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/charge_data/'
-
+#charge_data_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/charge_data/'
+charge_data_folder = '/Users/samuelfogarty/Desktop/mod0files.nosync/'
 # DBSCAN parameters
 eps_tracks = 30 ## mm
 min_samples_tracks = 8
@@ -40,7 +40,7 @@ use_pixel_plane_cut = False
 # light
 adc_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/light_data/'
 batch_size = 50 # how many events to load on each iteration
-do_match_of_charge_to_light = True
+do_match_of_charge_to_light = False
 
 # matching
 v_drift = 0.16 # cm/usec, 500V/cm

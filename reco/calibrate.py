@@ -45,16 +45,17 @@ def timestamp_corrector(packets, mc_assn, unix, detector):
     packet_type_0 = packets['packet_type'] == 0
     ts = ts[packet_type_0]
     packets = packets[packet_type_0]
+
     if mc_assn != None:
         mc_assn = mc_assn[packet_type_0]
-    
     if mc_assn == None and timestamp_cut:
-        # cut needed for module0 data, due to noisy packets too close to PPS pulse
-        timestamp_data_cut = np.invert((packets['timestamp'] > 2e7) | (packets['timestamp'] < 1e6))
+        # cut needed due to noisy packets too close to PPS pulse
+        # (unless this problem has been fixed in the hardware)
+        timestamps = packets['timestamp']
+        timestamp_data_cut = np.invert((timestamps > 2e7) | (timestamps < 1e6))
         ts = ts[timestamp_data_cut]
         packets = packets[timestamp_data_cut]
         unix = unix[timestamp_data_cut]
-    
     if mc_assn == None and PACMAN_clock_correction:
         ts = PACMAN_drift(packets, detector).astype('i8')
     
@@ -99,6 +100,7 @@ def pedestal_and_config(unique_ids, mc_assn, detector):
     v_ped,v_cm,v_ref,gain = np.zeros_like(unique_ids,dtype='float64'),np.zeros_like(unique_ids,dtype='float64'),np.zeros_like(unique_ids,dtype='float64'),np.ones_like(unique_ids,dtype='float64')
 
     # make arrays with values for v_ped,v_cm,v_ref, and gain for ADC to ke- conversion 
+    # FIXME: Can we make this without the for loop?
     for i,id in enumerate(unique_ids):
         if not mc_assn:
             v_ped[i] = pedestal_dict[id]['pedestal_mv']

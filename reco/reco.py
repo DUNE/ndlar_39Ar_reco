@@ -18,7 +18,8 @@ import importlib.util
 def reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, detector):
     ## loop through seconds of data and do charge reconstruction
     for sec in tqdm(range(nSec_start,int(nSec_end)+1),desc=" Seconds Processed: "):
-        # grab 1s at a time to analyze, plus the next 1s 
+        # Grab 1s at a time to analyze, plus the next 1s.
+        # Each 1s is determined by getting the packets between PPS pulses (packet type 6).
         if sec == 1:
             packets_1sec = packets[0:PPS_indices[sec-1]]
             packets_nextPPS = packets[PPS_indices[sec-1]:PPS_indices[sec]]
@@ -47,29 +48,33 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, det
             mc_assn_1sec = np.concatenate((mc_assn_1sec, mc_assn_nextPPS[packets_nextPPS_receipt_diff_mask]))
         else:
             mc_assn_1sec = None
+        # run reconstruction on selected packets.
+        # this block is be run first and thus defines all the arrays for concatenation later.
         if sec == nSec_start:
             results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7,\
                 hits_small_clusters, hits_large_clusters = analysis(packets_1sec, pixel_xy, mc_assn_1sec, detector, 0, 0)
         elif sec > nSec_start:
+            # making sure to continously increment cluster_index as we go onto the next PPS
             hits_small_clusters_max_cindex = np.max(hits_small_clusters['cluster_index'])+1
             if np.size(hits_large_clusters['cluster_index']) > 0:
                 hits_large_clusters_max_cindex = np.max(hits_large_clusters['cluster_index'])+1
             else:
                 hits_large_clusters_max_cindex = 0
+            # run reconstruction and save temporary arrays of results
             results_small_clusters_temp, results_large_clusters_temp, unix_pt7_temp, PPS_pt7_temp,\
                 hits_small_clusters_temp,hits_large_clusters_temp = analysis(packets_1sec, pixel_xy, mc_assn_1sec, detector,\
                                         hits_small_clusters_max_cindex, hits_large_clusters_max_cindex)
+            # concatenate temp arrays to main arrays
             results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
             results_large_clusters = np.concatenate((results_large_clusters, results_large_clusters_temp))
             hits_small_clusters = np.concatenate((hits_small_clusters, hits_small_clusters_temp))
             hits_large_clusters = np.concatenate((hits_large_clusters, hits_large_clusters_temp))
-            #print('length of hits small clusters: ', len(hits_small_clusters))
             unix_pt7 = np.concatenate((unix_pt7, unix_pt7_temp))
             PPS_pt7 = np.concatenate((PPS_pt7, PPS_pt7_temp))
-    return results_small_clusters, results_large_clusters, unix_pt7,PPS_pt7, hits_small_clusters,hits_large_clusters
+    return results_small_clusters, results_large_clusters, unix_pt7,PPS_pt7, hits_small_clusters, hits_large_clusters
     
 def run_reconstruction(input_config_filename):
-    ## main function to run reconstruction
+    ## main function
     
     # import input variables. Get variables with module.<variable>
     input_config_filepath = 'input_config/' + input_config_filename
@@ -138,7 +143,8 @@ def run_reconstruction(input_config_filename):
     # get packets and indices of PPS pulses
     packets = f_packets['packets']
     if sync_filename is not None:
-        # this is an option to load a pre-determined mask for the sync packets
+        # this is an option to load a pre-determined mask for the sync packets,
+        # where a different sync file needs to be made for each packets file
         sync_filepath = charge_data_folder + detector + '/' + sync_filename
         print('Loading sync mask file ', sync_filepath, ' ...')
         PPS_mask_file = np.load(sync_filepath)

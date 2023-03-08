@@ -67,50 +67,31 @@ def build_charge_events_small_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gai
         unix_vals_event = unix_vals_all[label_mask]
         
         # loop through hits within each event, concatenate to hits array with cluster index
-        for j in range(np.sum(label_mask)):
-            hit = np.zeros((1,), dtype=hits_dtype)
-            hit['q'] = q_vals_event[j]
-            hit['io_group'] = io_group_vals_event[j]
-            hit['t'] = t_vals_event[j]/(v_drift*1e1) * 1e3
-            hit['x'] = x_vals_event[j]
-            hit['y'] = y_vals_event[j]
-            hit['z'] = z_vals_event[j]
-            hit['unix'] = unix_vals_event[j]
-            hit['cluster_index'] = i
-            hits = np.concatenate((hits, hit))
+        nhits = np.sum(label_mask)
+        hits_event = np.zeros((nhits,), dtype=hits_dtype)
+        hits_event['q'] = q_vals_event
+        hits_event['io_group'] = io_group_vals_event
+        hits_event['t'] = t_vals_event/(v_drift*1e1) * 1e3
+        hits_event['x'] = x_vals_event
+        hits_event['y'] = y_vals_event
+        hits_event['z'] = z_vals_event
+        hits_event['unix'] = unix_vals_event
+        hits_event['cluster_index'] = np.ones(nhits)*i
+        hits = np.concatenate((hits, hits_event))
     
     # find midpoint of clustered hits and save array of all event information
     n_vals = np.bincount(labels)
+    # get rid of n_vals that are 0, which are a natural result of bincount, 
+    # otherwise we get divide by 0 later
     t_vals = np.bincount(labels, weights=txyz[:,0].astype('i8'))[n_vals != 0] # add up x values of hits in cluster then avg
-    x_vals = np.bincount(labels, weights=txyz[:,1].astype('i8'))[n_vals != 0]
-    y_vals = np.bincount(labels, weights=txyz[:,2].astype('i8'))[n_vals != 0]
-    z_vals = np.bincount(labels, weights=txyz[:,3].astype('i8'))[n_vals != 0]
     unix_vals = np.bincount(labels, weights=unix)[n_vals != 0]
     q_vals = q_vals[n_vals != 0]
-    n_vals = n_vals[n_vals != 0] # get rid of n_vals that are 0, otherwise get divide by 0 later
-    
-    #q_vals_not_0 = q_vals != 0
-    #t_vals = t_vals[q_vals_not_0]
-    #x_vals = x_vals[q_vals_not_0]
-    #y_vals = y_vals[q_vals_not_0]
-    #z_vals = z_vals[q_vals_not_0]
-    #n_vals = n_vals[q_vals_not_0]
-    #q_vals = q_vals[q_vals_not_0]
-    #unix_vals = unix_vals[q_vals_not_0]
-    #io_group_vals = io_group_vals[q_vals_not_0]
-    
-    # for track-like events
-    #labels_tracks = np.array(labels_cosmics)
-    #labels_tracks = labels_cosmics[labels_cosmics != -1]
-    #n_vals_tracks = np.bincount(labels_cosmics)
+    n_vals = n_vals[n_vals != 0]
     
     results = np.zeros((len(n_vals[n_vals != 0]),), dtype=event_dtype)
     results['nhit'] = n_vals
     results['q'] = q_vals
     results['t'] = (t_vals/(n_vals*v_drift*1e1) * 1e3).astype('i8') # average for each event
-    results['x'] = x_vals/n_vals
-    results['y'] = y_vals/n_vals
-    results['z'] = z_vals/n_vals
     results['unix'] = (unix_vals/n_vals).astype('i8') # all of these hits should have the same unix anyway
     results['io_group'] = (io_group_vals/n_vals).astype('i4')
     results['matched'] = np.zeros(len(n_vals), dtype='i4')
@@ -155,17 +136,17 @@ def build_charge_events_large_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gai
         unix_vals_event = unix_vals_all[label_mask]
         
         # loop through hits within each event, concatenate to hits array with cluster index
-        for j in range(np.sum(label_mask)):
-            hit = np.zeros((1,), dtype=hits_dtype)
-            hit['q'] = q_vals_event[j]
-            hit['io_group'] = io_group_vals_event[j]
-            hit['t'] = t_vals_event[j]/(v_drift*1e1) * 1e3
-            hit['x'] = x_vals_event[j]
-            hit['y'] = y_vals_event[j]
-            hit['z'] = z_vals_event[j]
-            hit['unix'] = unix_vals_event[j]
-            hit['cluster_index'] = i
-            hits = np.concatenate((hits, hit))
+        nhits = np.sum(label_mask)
+        hits_event = np.zeros((nhits,), dtype=hits_dtype)
+        hits_event['q'] = q_vals_event
+        hits_event['io_group'] = io_group_vals_event
+        hits_event['t'] = t_vals_event/(v_drift*1e1) * 1e3
+        hits_event['x'] = x_vals_event
+        hits_event['y'] = y_vals_event
+        hits_event['z'] = z_vals_event
+        hits_event['unix'] = unix_vals_event
+        hits_event['cluster_index'] = np.ones(nhits)*i
+        hits = np.concatenate((hits, hits_event))
     
     timestamps = txyz[:,0]
     indices_sorted = np.argsort(labels)
@@ -177,20 +158,20 @@ def build_charge_events_large_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gai
     min_timestamps = np.array([np.min(t) for t in label_timestamps], dtype='i8')
     max_timestamps = np.array([np.max(t) for t in label_timestamps], dtype='i8')
 
-    # find midpoint of clustered hits and save array of all event information
+    # save array of event information
     n_vals = np.bincount(labels)
-    t_vals = np.bincount(labels, weights=txyz[:,0])[n_vals != 0] # add up x values of hits in cluster then avg
+    #t_vals = np.bincount(labels, weights=txyz[:,0])[n_vals != 0] # add up x values of hits in cluster then avg
     io_group_vals = np.bincount(labels, weights=io_group)
     unix_vals = np.bincount(labels, weights=unix)[n_vals != 0]
     q_vals = q_vals[n_vals != 0]
     n_vals = n_vals[n_vals != 0] # get rid of n_vals that are 0, otherwise get divide by 0 later
 
-    q_vals_not_0 = q_vals != 0
-    t_vals = t_vals[q_vals_not_0]
-    n_vals = n_vals[q_vals_not_0]
-    q_vals = q_vals[q_vals_not_0]
-    unix_vals = unix_vals[q_vals_not_0]
-    io_group_vals = io_group_vals[q_vals_not_0]
+    #q_vals_not_0 = q_vals != 0
+    #t_vals = t_vals[q_vals_not_0]
+    #n_vals = n_vals[q_vals_not_0]
+    #q_vals = q_vals[q_vals_not_0]
+    #unix_vals = unix_vals[q_vals_not_0]
+    #io_group_vals = io_group_vals[q_vals_not_0]
     
     results = np.zeros((len(n_vals[n_vals != 0]),), dtype=event_dtype)
     results['nhit'] = n_vals
@@ -204,22 +185,24 @@ def build_charge_events_large_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gai
     return results, hits
 
 def analysis(packets, pixel_xy, mc_assn, detector,hits_small_clusters_max_cindex,hits_large_clusters_max_cindex):
-    if mc_assn != None:
-        mc_assn = mc_assn[packets['packet_type'] != 6]
-    packets = packets[packets['packet_type'] != 6]
+    #if mc_assn != None:
+    #    mc_assn = mc_assn[packets['packet_type'] != 6]
+    #packets = packets[packets['packet_type'] != 6]
     
     packet_type = packets['packet_type']
+    pkt_7_mask = packet_type == 7
+    pkt_4_mask = packet_type == 4
+    pkt_0_mask = packet_type == 0
     # grab the PPS timestamps of pkt type 7s and correct for PACMAN clock drift
-    PPS_pt7 = PACMAN_drift(packets, detector)[packet_type == 7].astype('i8')*1e-1*1e3 # ns
+    PPS_pt7 = PACMAN_drift(packets, detector)[pkt_7_mask].astype('i8')*1e-1*1e3 # ns
     # assign a unix timestamp to each packet based on the timestamp of the previous packet type 4
-    packet_type4_mask = packet_type == 4
     timestamps = packets['timestamp'].astype('i8')
     unix_timestamps = timestamps
-    unix_timestamps[packet_type != 4] = 0
+    unix_timestamps[pkt_4_mask] = 0
     nonzero_indices = np.nonzero(unix_timestamps)[0]
     unix_timestamps = np.interp(np.arange(len(unix_timestamps)), nonzero_indices, unix_timestamps[nonzero_indices])
-    unix_pt7 = unix_timestamps[packet_type == 7].astype('i8')
-    unix = unix_timestamps[packet_type == 0].astype('i8')
+    unix_pt7 = unix_timestamps[pkt_7_mask].astype('i8')
+    unix = unix_timestamps[pkt_0_mask].astype('i8')
     
     # apply a few PPS timestamp corrections, and select only data packets for analysis
     ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix, detector)
@@ -231,8 +214,6 @@ def analysis(packets, pixel_xy, mc_assn, detector,hits_small_clusters_max_cindex
     v_ped, v_cm, v_ref, gain = calibrations(packets, mc_assn, detector)
     
     # cluster packets to find track-like charge events
-    #### this block is slow(?)
-    #if mc_assn == None:
     txyz_core_tracks, txyz_noise_tracks, txyz_noncore_tracks, db = cluster_packets(eps_tracks, min_samples_tracks, txyz)
     labels_tracks = db.labels_
     
@@ -252,8 +233,8 @@ def analysis(packets, pixel_xy, mc_assn, detector,hits_small_clusters_max_cindex
     
     # build charge events
     event_small_clusters_dtype = np.dtype([('nhit', '<i4'), ('q', '<f8'),('io_group', 'i4'),\
-                                           ('t', '<i8'),('x', '<f8'),('y', '<f8'),('z', '<f8'),\
-                                           ('unix', 'i8'), ('matched', 'i4'), ('light_index', 'i4')])
+                                           ('t', '<i8'),('unix', 'i8'),\
+                                           ('matched', 'i4'), ('light_index', 'i4')])
     hits_dtype = np.dtype([('q', '<f8'),('io_group', '<i4'),\
                             ('t', '<i8'),('x', '<f8'), ('y', '<f8'), ('z', '<f8'),\
                             ('unix', '<i8'), ('cluster_index', '<i4')])
