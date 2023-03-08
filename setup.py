@@ -2,7 +2,7 @@
 
 VER = "0.0.0"
 
-reqs = ["numpy","adc64format", "tqdm", "sklearn", "collections", "json", "time", "fire", "matplotlib", "pickle", "scipy", "h5py","os"]
+reqs = ["numpy","adc64format", "tqdm", "sklearn", "collections", "json", "time", "fire", "matplotlib", "pickle", "scipy", "h5py","os", "importlib"]
 
 import setuptools
 
