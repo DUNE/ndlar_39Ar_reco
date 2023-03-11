@@ -109,7 +109,7 @@ def run_reconstruction(input_config_filename):
         raise Exception("Possible values of 'detector' are only 'module-0' and 'module-3' (without quotes).")
     if os.path.exists(output_events_filepath):
         raise Exception('Output file '+ str(output_events_filepath) + ' already exists.')
-    if nSec_start <= 0 or nSec_start - int(nSec_start) or nSec_end <= 0 or nSec_end - int(nSec_end) > 0:
+    if nSec_start <= 0 or nSec_start - int(nSec_start) or nSec_end < -1 or nSec_end - int(nSec_end) > 0:
         raise ValueError('nSec_start and nSec_end must be greater than zero and be an integer.')
     if input_packets_filename.split('.')[-1] != 'h5':
         raise Exception('Input file must be an h5 file.')
@@ -155,6 +155,10 @@ def run_reconstruction(input_config_filename):
         print('Finding sync packets on the fly (may take a few minutes)...')
         PPS_indices = np.where((packets['packet_type'] == 6) & (packets['trigger_type'] == 83))[0]
 
+    if nSec_end == -1:
+        nSec_end = len(PPS_indices)-1
+        print('nSec_end was set to -1, so setting nSec_end to final second in data of ', nSec_end)
+    
     print('Processing '+ str(nSec_end - nSec_start) + ' seconds of data, starting at '+\
          str(nSec_start) + ' seconds and stopping at ', str(nSec_end) + ' ...')
     
