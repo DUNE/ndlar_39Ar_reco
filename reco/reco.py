@@ -157,6 +157,7 @@ def run_reconstruction(input_config_filename):
 
     if nSec_end == -1:
         nSec_end = len(PPS_indices)-1
+        nSec_end_light = nSec_end
         print('nSec_end was set to -1, so setting nSec_end to final second in data of ', nSec_end)
     
     print('Processing '+ str(nSec_end - nSec_start) + ' seconds of data, starting at '+\
