@@ -198,7 +198,7 @@ def analysis(packets, pixel_xy, mc_assn, detector,hits_small_clusters_max_cindex
     # assign a unix timestamp to each packet based on the timestamp of the previous packet type 4
     timestamps = packets['timestamp'].astype('i8')
     unix_timestamps = timestamps
-    unix_timestamps[pkt_4_mask] = 0
+    unix_timestamps[np.invert(pkt_4_mask)] = 0
     nonzero_indices = np.nonzero(unix_timestamps)[0]
     unix_timestamps = np.interp(np.arange(len(unix_timestamps)), nonzero_indices, unix_timestamps[nonzero_indices])
     unix_pt7 = unix_timestamps[pkt_7_mask].astype('i8')
