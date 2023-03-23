@@ -1,7 +1,7 @@
 larnd-sim_beta-decays
 .ipynb_checkpoints/
 reco/mod0_39Ar_reconstruction_Jan2023.ipynb
-.gitignore
 .DS_Store
 reco/__pycache__
 *.ipynb
+sim

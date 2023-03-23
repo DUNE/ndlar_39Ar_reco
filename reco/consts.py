@@ -22,7 +22,7 @@ gain_sim = 1/221
 gain_data = 1/221 # mV/e-
 
 ### charge
-charge_data_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/charge_data/'
+#charge_data_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/'
 #charge_data_folder = '/Users/samuelfogarty/Desktop/mod0files.nosync/'
 # DBSCAN parameters
 eps_tracks = 20 ## mm

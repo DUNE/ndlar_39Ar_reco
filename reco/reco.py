@@ -72,7 +72,12 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, det
             unix_pt7 = np.concatenate((unix_pt7, unix_pt7_temp))
             PPS_pt7 = np.concatenate((PPS_pt7, PPS_pt7_temp))
     return results_small_clusters, results_large_clusters, unix_pt7,PPS_pt7, hits_small_clusters, hits_large_clusters
-    
+
+def reco_MC(packets, mc_assn, pixel_xy, detector):
+    results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7,\
+        hits_small_clusters, hits_large_clusters = analysis(packets, pixel_xy, mc_assn, detector, 0, 0)
+    return results_small_clusters, results_large_clusters, unix_pt7,PPS_pt7, hits_small_clusters, hits_large_clusters
+
 def run_reconstruction(input_config_filename):
     ## main function
     
@@ -100,10 +105,8 @@ def run_reconstruction(input_config_filename):
     matching_tolerance_unix = module.matching_tolerance_unix
     matching_tolerance_PPS = module.matching_tolerance_PPS
     
-    packets_filename_base = input_packets_filename.split('.h5')[0]
-    packets_folder = charge_data_folder + detector + '/'
-    input_packets_filepath = packets_folder + input_packets_filename
-    output_events_filepath = packets_folder + output_events_filename
+    input_packets_filepath = input_packets_filename
+    output_events_filepath = output_events_filename
     
     if detector not in ['module-0', 'module-3']:
         raise Exception("Possible values of 'detector' are only 'module-0' and 'module-3' (without quotes).")
@@ -142,7 +145,7 @@ def run_reconstruction(input_config_filename):
     
     # get packets and indices of PPS pulses
     packets = f_packets['packets']
-    if sync_filename is not None:
+    if sync_filename is not None and np.size(mc_assn) == 0:
         # this is an option to load a pre-determined mask for the sync packets,
         # where a different sync file needs to be made for each packets file
         sync_filepath = charge_data_folder + detector + '/' + sync_filename
@@ -150,28 +153,32 @@ def run_reconstruction(input_config_filename):
         PPS_mask_file = np.load(sync_filepath)
         PPS_mask = PPS_mask_file[PPS_mask_file.files[0]]
         PPS_indices = np.where(PPS_mask)[0]
-    else:
+    elif sync_filename is None and np.size(mc_assn) == 0:
         # note this can take at least a few minutes sometimes
         print('Finding sync packets on the fly (may take a few minutes)...')
         PPS_indices = np.where((packets['packet_type'] == 6) & (packets['trigger_type'] == 83))[0]
-
-    if nSec_end == -1:
+    
+    if nSec_end == -1 and np.size(mc_assn) == 0:
         nSec_end = len(PPS_indices)-1
         nSec_end_light = nSec_end
         print('nSec_end was set to -1, so setting nSec_end to final second in data of ', nSec_end)
     
-    print('Processing '+ str(nSec_end - nSec_start) + ' seconds of data, starting at '+\
-         str(nSec_start) + ' seconds and stopping at ', str(nSec_end) + ' ...')
+    if np.size(mc_assn) == 0:
+        print('Processing '+ str(nSec_end - nSec_start) + ' seconds of data, starting at '+\
+             str(nSec_start) + ' seconds and stopping at ', str(nSec_end) + ' ...')
     
     # run reconstruction
-    results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7, hits_small_clusters,hits_large_clusters = \
-        reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, detector)
-    
+    if np.size(mc_assn) == 0:
+        results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7, hits_small_clusters,hits_large_clusters = \
+            reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, detector)
+    else:
+        results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7, hits_small_clusters,hits_large_clusters = \
+            reco_MC(packets, mc_assn, pixel_xy, detector)
     # do cuts on charge events. See toggles for cuts in consts.py.
     # if all toggles are False then this command simply returns `results` unchanged.
     #results_small_clusters = charge_event_cuts.all_charge_event_cuts(results_small_clusters)
     
-    if do_match_of_charge_to_light:
+    if do_match_of_charge_to_light and mc_assn == None:
         # loop through the light files and only select triggers within the second ranges specified
         # note that not all these light events will have a match within the packets data selection
         input_light_filepath_1 = adc_folder + detector + '/' + input_light_filename_1
@@ -216,8 +223,9 @@ def run_reconstruction(input_config_filename):
     
     analysis_end = time.time()
     print('Time to do full analysis = ', analysis_end-analysis_start, ' seconds')
-    print('Total small clusters = ', len(results_small_clusters), ' with a rate of ', len(results_small_clusters)/(nSec_end-nSec_start), ' Hz')
-    print('Total large clusters = ', len(results_large_clusters), ' with a rate of ', len(results_large_clusters)/(nSec_end - nSec_start), ' Hz')
+    if np.size(mc_assn) == 0:
+        print('Total small clusters = ', len(results_small_clusters), ' with a rate of ', len(results_small_clusters)/(nSec_end-nSec_start), ' Hz')
+        print('Total large clusters = ', len(results_large_clusters), ' with a rate of ', len(results_large_clusters)/(nSec_end - nSec_start), ' Hz')
 
 if __name__ == "__main__":
     fire.Fire(run_reconstruction)
