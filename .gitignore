@@ -5,3 +5,4 @@ reco/mod0_39Ar_reconstruction_Jan2023.ipynb
 reco/__pycache__
 *.ipynb
 sim
+reco/39Ar_analysis_notebooks

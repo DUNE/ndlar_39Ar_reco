@@ -23,13 +23,13 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, det
         if sec == 1:
             packets_1sec = packets[0:PPS_indices[sec-1]]
             packets_nextPPS = packets[PPS_indices[sec-1]:PPS_indices[sec]]
-            if mc_assn != None:
+            if mc_assn is not None:
                 mc_assn_1sec = mc_assn[0:PPS_indices[sec-1]]
                 mc_assn_nextPPS = mc_assn[PPS_indices[sec-1]:PPS_indices[sec]]
         elif sec >= nSec_start and sec <= nSec_end:
             packets_1sec = packets[PPS_indices[sec-2]:PPS_indices[sec-1]]
             packets_nextPPS = packets[PPS_indices[sec-1]:PPS_indices[sec]]
-            if mc_assn != None:
+            if mc_assn is not None:
                 mc_assn_1sec = mc_assn[PPS_indices[sec-2]:PPS_indices[sec-1]]
                 mc_assn_nextPPS = mc_assn[PPS_indices[sec-1]:PPS_indices[sec]]
         
@@ -43,7 +43,7 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, det
                 & (packets_nextPPS['packet_type'] == 0)
         # move those packets from nextPPS to 1sec. Now we will only work on packets_1sec
         packets_1sec = np.concatenate((packets_1sec, packets_nextPPS[packets_nextPPS_receipt_diff_mask]))
-        if mc_assn != None:
+        if mc_assn is not None:
             mc_assn_1sec = mc_assn_1sec[np.invert(packets_1sec_receipt_diff_mask)]
             mc_assn_1sec = np.concatenate((mc_assn_1sec, mc_assn_nextPPS[packets_nextPPS_receipt_diff_mask]))
         else:
@@ -145,7 +145,7 @@ def run_reconstruction(input_config_filename):
     
     # get packets and indices of PPS pulses
     packets = f_packets['packets']
-    if sync_filename is not None and np.size(mc_assn) == 0:
+    if sync_filename is not None and mc_assn is None:
         # this is an option to load a pre-determined mask for the sync packets,
         # where a different sync file needs to be made for each packets file
         sync_filepath = charge_data_folder + detector + '/' + sync_filename
@@ -153,17 +153,17 @@ def run_reconstruction(input_config_filename):
         PPS_mask_file = np.load(sync_filepath)
         PPS_mask = PPS_mask_file[PPS_mask_file.files[0]]
         PPS_indices = np.where(PPS_mask)[0]
-    elif sync_filename is None and np.size(mc_assn) == 0:
+    elif sync_filename is None and mc_assn is None:
         # note this can take at least a few minutes sometimes
         print('Finding sync packets on the fly (may take a few minutes)...')
         PPS_indices = np.where((packets['packet_type'] == 6) & (packets['trigger_type'] == 83))[0]
     
-    if nSec_end == -1 and np.size(mc_assn) == 0:
+    if nSec_end == -1 and mc_assn is None:
         nSec_end = len(PPS_indices)-1
         nSec_end_light = nSec_end
         print('nSec_end was set to -1, so setting nSec_end to final second in data of ', nSec_end)
     
-    if np.size(mc_assn) == 0:
+    if mc_assn is None:
         print('Processing '+ str(nSec_end - nSec_start) + ' seconds of data, starting at '+\
              str(nSec_start) + ' seconds and stopping at ', str(nSec_end) + ' ...')
     
@@ -178,7 +178,7 @@ def run_reconstruction(input_config_filename):
     # if all toggles are False then this command simply returns `results` unchanged.
     #results_small_clusters = charge_event_cuts.all_charge_event_cuts(results_small_clusters)
     
-    if do_match_of_charge_to_light and mc_assn == None:
+    if do_match_of_charge_to_light and mc_assn is None:
         # loop through the light files and only select triggers within the second ranges specified
         # note that not all these light events will have a match within the packets data selection
         input_light_filepath_1 = adc_folder + detector + '/' + input_light_filename_1

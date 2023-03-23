@@ -46,9 +46,9 @@ def timestamp_corrector(packets, mc_assn, unix, detector):
     ts = ts[packet_type_0]
     packets = packets[packet_type_0]
 
-    if np.size(mc_assn) > 0:
+    if mc_assn is not None:
         mc_assn = mc_assn[packet_type_0]
-    if np.size(mc_assn) == 0 and timestamp_cut:
+    if mc_assn is None and timestamp_cut:
         # cut needed due to noisy packets too close to PPS pulse
         # (unless this problem has been fixed in the hardware)
         timestamps = packets['timestamp']
@@ -56,7 +56,7 @@ def timestamp_corrector(packets, mc_assn, unix, detector):
         ts = ts[timestamp_data_cut]
         packets = packets[timestamp_data_cut]
         unix = unix[timestamp_data_cut]
-    if np.size(mc_assn) == 0 and PACMAN_clock_correction:
+    if mc_assn is None and PACMAN_clock_correction:
         ts = PACMAN_drift(packets, detector).astype('i8')
     
     return ts, packets, mc_assn, unix
@@ -102,7 +102,7 @@ def pedestal_and_config(unique_ids, mc_assn, detector):
     # make arrays with values for v_ped,v_cm,v_ref, and gain for ADC to ke- conversion 
     # FIXME: Can we make this without the for loop?
     for i,id in enumerate(unique_ids):
-        if np.size(mc_assn) == 0:
+        if mc_assn is None:
             v_ped[i] = pedestal_dict[id]['pedestal_mv']
             v_cm[i] = config_dict[id]['vcm_mv']
             v_ref[i] = config_dict[id]['vref_mv']
