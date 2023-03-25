@@ -23,15 +23,9 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, det
         if sec == 1:
             packets_1sec = packets[0:PPS_indices[sec-1]]
             packets_nextPPS = packets[PPS_indices[sec-1]:PPS_indices[sec]]
-            if mc_assn is not None:
-                mc_assn_1sec = mc_assn[0:PPS_indices[sec-1]]
-                mc_assn_nextPPS = mc_assn[PPS_indices[sec-1]:PPS_indices[sec]]
         elif sec >= nSec_start and sec <= nSec_end:
             packets_1sec = packets[PPS_indices[sec-2]:PPS_indices[sec-1]]
             packets_nextPPS = packets[PPS_indices[sec-1]:PPS_indices[sec]]
-            if mc_assn is not None:
-                mc_assn_1sec = mc_assn[PPS_indices[sec-2]:PPS_indices[sec-1]]
-                mc_assn_nextPPS = mc_assn[PPS_indices[sec-1]:PPS_indices[sec]]
         
         # remove packets from the 1sec that belongs in the previous second
         packets_1sec_receipt_diff_mask = (packets_1sec['receipt_timestamp'].astype(int) - packets_1sec['timestamp'].astype(int) < 0)\
@@ -43,16 +37,11 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, det
                 & (packets_nextPPS['packet_type'] == 0)
         # move those packets from nextPPS to 1sec. Now we will only work on packets_1sec
         packets_1sec = np.concatenate((packets_1sec, packets_nextPPS[packets_nextPPS_receipt_diff_mask]))
-        if mc_assn is not None:
-            mc_assn_1sec = mc_assn_1sec[np.invert(packets_1sec_receipt_diff_mask)]
-            mc_assn_1sec = np.concatenate((mc_assn_1sec, mc_assn_nextPPS[packets_nextPPS_receipt_diff_mask]))
-        else:
-            mc_assn_1sec = None
         # run reconstruction on selected packets.
         # this block is be run first and thus defines all the arrays for concatenation later.
         if sec == nSec_start:
             results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7,\
-                hits_small_clusters, hits_large_clusters = analysis(packets_1sec, pixel_xy, mc_assn_1sec, detector, 0, 0)
+                hits_small_clusters, hits_large_clusters = analysis(packets_1sec, pixel_xy, mc_assn, detector, 0, 0)
         elif sec > nSec_start:
             # making sure to continously increment cluster_index as we go onto the next PPS
             hits_small_clusters_max_cindex = np.max(hits_small_clusters['cluster_index'])+1
@@ -62,7 +51,7 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, det
                 hits_large_clusters_max_cindex = 0
             # run reconstruction and save temporary arrays of results
             results_small_clusters_temp, results_large_clusters_temp, unix_pt7_temp, PPS_pt7_temp,\
-                hits_small_clusters_temp,hits_large_clusters_temp = analysis(packets_1sec, pixel_xy, mc_assn_1sec, detector,\
+                hits_small_clusters_temp,hits_large_clusters_temp = analysis(packets_1sec, pixel_xy, mc_assn, detector,\
                                         hits_small_clusters_max_cindex, hits_large_clusters_max_cindex)
             # concatenate temp arrays to main arrays
             results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
@@ -163,12 +152,10 @@ def run_reconstruction(input_config_filename):
         nSec_end_light = nSec_end
         print('nSec_end was set to -1, so setting nSec_end to final second in data of ', nSec_end)
     
+    # run reconstruction
     if mc_assn is None:
         print('Processing '+ str(nSec_end - nSec_start) + ' seconds of data, starting at '+\
              str(nSec_start) + ' seconds and stopping at ', str(nSec_end) + ' ...')
-    
-    # run reconstruction
-    if np.size(mc_assn) == 0:
         results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7, hits_small_clusters,hits_large_clusters = \
             reco_loop(nSec_start, nSec_end, PPS_indices, packets, mc_assn, pixel_xy, detector)
     else:
