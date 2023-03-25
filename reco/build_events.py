@@ -16,7 +16,6 @@ def cluster_packets(eps,min_samples,txyz):
     db = DBSCAN(eps=eps, min_samples=min_samples).fit(txyz) 
     # core samples
     core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-    
     core_samples_mask[db.core_sample_indices_] = True
     txyz_coresamples = np.array(txyz)[core_samples_mask]
     # noise samples
@@ -178,13 +177,6 @@ def build_charge_events_large_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gai
     unix_vals = np.bincount(labels, weights=unix)[n_vals != 0]
     q_vals = q_vals[n_vals != 0]
     n_vals = n_vals[n_vals != 0] # get rid of n_vals that are 0, otherwise get divide by 0 later
-
-    #q_vals_not_0 = q_vals != 0
-    #t_vals = t_vals[q_vals_not_0]
-    #n_vals = n_vals[q_vals_not_0]
-    #q_vals = q_vals[q_vals_not_0]
-    #unix_vals = unix_vals[q_vals_not_0]
-    #io_group_vals = io_group_vals[q_vals_not_0]
     
     results = np.zeros((len(n_vals[n_vals != 0]),), dtype=event_dtype)
     results['nhit'] = n_vals
@@ -197,17 +189,16 @@ def build_charge_events_large_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gai
     results['light_index'] = np.ones(len(n_vals), dtype='i4')*-1
     return results, hits
 
-def analysis(packets, pixel_xy, mc_assn, detector,hits_small_clusters_max_cindex,hits_large_clusters_max_cindex):
-    #if mc_assn != None:
-    #    mc_assn = mc_assn[packets['packet_type'] != 6]
-    #packets = packets[packets['packet_type'] != 6]
-    
+def analysis(packets,pixel_xy,mc_assn,detector,hits_small_clusters_max_cindex,hits_large_clusters_max_cindex):
+    ## do charge reconstruction
     packet_type = packets['packet_type']
     pkt_7_mask = packet_type == 7
     pkt_4_mask = packet_type == 4
     pkt_0_mask = packet_type == 0
+    
     # grab the PPS timestamps of pkt type 7s and correct for PACMAN clock drift
     PPS_pt7 = PACMAN_drift(packets, detector)[pkt_7_mask].astype('i8')*1e-1*1e3 # ns
+    
     # assign a unix timestamp to each packet based on the timestamp of the previous packet type 4
     timestamps = packets['timestamp'].astype('i8')
     unix_timestamps = timestamps
@@ -234,6 +225,7 @@ def analysis(packets, pixel_xy, mc_assn, detector,hits_small_clusters_max_cindex
     txyz_core_small_clusters, txyz_noise_small_clusters, txyz_noncore_small_clusters, db_small_clusters = \
         cluster_packets(eps_noise, min_samples_noise,txyz_noise_tracks)
     
+    # apply noise mask to get values for only the hits of 39Ar candidates
     noise_samples_mask = db.labels_ == -1
     labels_small_clusters = db_small_clusters.labels_
     dataword_small_clusters = np.array(dataword)[noise_samples_mask]
@@ -245,13 +237,15 @@ def analysis(packets, pixel_xy, mc_assn, detector,hits_small_clusters_max_cindex
     io_group_small_clusters = io_group[noise_samples_mask]
     unique_ids_small_clusters = unique_ids[noise_samples_mask]
     
-    # build charge events
+    # make dtypes for datasets
     event_small_clusters_dtype = np.dtype([('nhit', '<i4'), ('q', '<f8'),('io_group', 'i4'),\
                                            ('t', '<i8'),('unix', 'i8'),('x', '<f8'),('y', '<f8'),('z', '<f8'),\
                                            ('matched', 'i4'), ('light_index', 'i4')])
     hits_dtype = np.dtype([('q', '<f8'),('io_group', '<i4'),('unique_id', 'i4'),\
                             ('t', '<i8'),('x', '<f8'), ('y', '<f8'), ('z', '<f8'),\
                             ('unix', '<i8'), ('cluster_index', '<i4')])
+    
+    # build charge events for small clusters
     results_small_clusters, hits_small_clusters = \
         build_charge_events_small_clusters(labels_small_clusters,dataword_small_clusters,txyz_noise_tracks,\
          v_ref=v_ref_small_clusters,v_cm=v_cm_small_clusters,v_ped=v_ped_small_clusters,\
@@ -259,6 +253,7 @@ def analysis(packets, pixel_xy, mc_assn, detector,hits_small_clusters_max_cindex
          unique_ids=unique_ids_small_clusters, event_dtype=event_small_clusters_dtype,hits_size=hits_small_clusters_max_cindex,\
          hits_dtype=hits_dtype)
 
+    # apply inverted noise mask to get large clusters (i.e. tracks)
     noise_samples_mask_inverted = np.invert(noise_samples_mask)
     labels_large_clusters = labels_tracks[noise_samples_mask_inverted]
     dataword_large_clusters = np.array(dataword)[noise_samples_mask_inverted]
