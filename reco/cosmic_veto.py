@@ -9,7 +9,7 @@ import time
 from consts import *
 from multiprocessing import Pool, cpu_count
 PPS_window = drift_distance/v_drift * 1e3
-filepath = '/sdf/group/neutrino/sfogarty/ND_prototype_files/charge_data/module-0/datalog_2021_04_04_01_19_19_CEST_module-0_events.h5'
+filepath = '/sdf/group/neutrino/sfogarty/ND_prototype_files/charge_data/module-0/datalog_2021_04_04_00_41_40_CEST_events_test.h5'
 file = h5py.File(filepath, 'r')
 large_clusters = file['large_clusters']
 small_clusters = file['small_clusters']
@@ -32,7 +32,7 @@ def cosmic_veto():
     start = time.time()
 
     # Split the large_clusters array into smaller chunks
-    chunk_size = 25
+    chunk_size = 10
     chunks = [large_clusters[i:i+chunk_size] for i in range(0, len(large_clusters), chunk_size)]
 
     print('Determining small_clusters within ', PPS_window, ' ns from the start and end of large clusters...')

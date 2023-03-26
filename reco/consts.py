@@ -23,7 +23,7 @@ eps_noise = 10 ## mm
 min_samples_noise = 1
 
 # Toggles for cuts and calibrations
-timestamp_cut = True
+timestamp_cut = False
 PACMAN_clock_correction = True
 use_charge_event_drift_window_cut = False
 use_pixel_plane_cut = False
