@@ -67,7 +67,7 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
 
 def reco_MC(packets, mc_assn, pixel_xy, detector):
     results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7,\
-        hits_small_clusters, hits_large_clusters = analysis(packets, pixel_xy, mc_assn, detector, 0, 0)
+        hits_small_clusters, hits_large_clusters = analysis(packets, pixel_xy, mc_assn, detector, 0, 0, 0)
     return results_small_clusters, results_large_clusters, unix_pt7,PPS_pt7, hits_small_clusters, hits_large_clusters
 
 def run_reconstruction(input_config_filename):
