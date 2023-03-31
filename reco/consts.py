@@ -23,7 +23,7 @@ eps_noise = 10 ## mm
 min_samples_noise = 1
 
 # Toggles for cuts and calibrations
-timestamp_cut = False
+timestamp_cut = True
 PACMAN_clock_correction = True
 use_charge_event_drift_window_cut = False
 use_pixel_plane_cut = False
@@ -31,7 +31,7 @@ use_pixel_plane_cut = False
 # light
 adc_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/light_data/'
 batch_size = 50 # how many events to load on each iteration
-do_match_of_charge_to_light = False
+do_match_of_charge_to_light = True
 
 # matching
 v_drift = 0.16 # cm/usec, 500V/cm

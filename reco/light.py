@@ -65,7 +65,7 @@ def into_array(events_file_0, events_file_1, batch_size, event_dtype, detector,a
 # go through relevant seconds in .data files for LRS
 def read_light_files(adc_file_1, adc_file_2, nSec_start, nSec_end, detector, adc_steps, nchannels_adc1, nchannels_adc2, adc_sn_1,adc_sn_2):
     go = True
-    event_dtype = np.dtype([('tai_s', '<i4'), ('tai_ns', '<i8'), ('unix', '<i8'), ('channel_'+adc_sn_1, 'u1' , (nchannels_adc1,)),('channel_'+adc_sn_2, 'u1' , (nchannels_adc2,)), ('voltage_'+adc_sn_1,'<i2',(nchannels_adc1,adc_steps)), ('voltage_'+adc_sn_2,'<i2',(nchannels_adc2,adc_steps))])
+    event_dtype = np.dtype([('tai_s', '<i4'), ('tai_ns', '<i8'), ('unix', '<i8'), ('channel_'+adc_sn_1, 'u1' , (nchannels_adc1,)),('channel_'+adc_sn_2, 'u1' , (nchannels_adc2,)), ('voltage_'+adc_sn_1,'<i2',(nchannels_adc1,adc_steps)), ('voltage_'+adc_sn_2,'<i2',(nchannels_adc2,adc_steps)), ('light_unique_id', '<i4')])
     light_events_all = np.zeros((0,),dtype=event_dtype)
     # read through the LRS files to get the light triggers
     with ADC64Reader(adc_file_1, adc_file_2) as reader:

@@ -48,11 +48,6 @@ def match_light_to_charge(light_events, charge_events, PPS_ext_triggers, unix_ex
         charge_event_ns_min = charge_events['t_min']
         charge_event_ns_max = charge_events['t_max']
     charge_event_unix = charge_events['unix']
-    num_matched_0 = 0
-    num_matched_1 = 0
-    num_matched_2 = 0
-    num_matched_3 = 0
-    num_matched_more = 0
     
     PPS_window = int(drift_distance / v_drift * 1e3)
     unix_window = 1 # s
@@ -63,6 +58,7 @@ def match_light_to_charge(light_events, charge_events, PPS_ext_triggers, unix_ex
         light_event = light_events[i]
         PPS_ext_trigger = PPS_ext_triggers[i]
         unix_ext_trigger = unix_ext_triggers[i]
+        light_event['light_unique_id'] = i
         if cluster_type == 0:
             matched_events_PPS = (charge_event_ns > PPS_ext_trigger) & (charge_event_ns < PPS_ext_trigger + PPS_window)
             matched_events_unix = (charge_event_unix > unix_ext_trigger-unix_window) & (charge_event_unix < unix_ext_trigger + unix_window)
@@ -77,17 +73,6 @@ def match_light_to_charge(light_events, charge_events, PPS_ext_triggers, unix_ex
                 charge_events[index]['matched'] = 1
                 charge_events[index]['light_index'] = matched_light_index
             matched_light_index += 1
-        if len(matched_events_indices) == 0:
-            num_matched_0 += 1
-        elif len(matched_events_indices) == 1:
-            num_matched_1 += 1
-        elif len(matched_events_indices) == 2:
-            num_matched_2 += 1
-        elif len(matched_events_indices) == 3:
-            num_matched_3 += 1
-        elif len(matched_events_indices) > 3:
-            num_matched_more += 1
     results_light_events = light_events[np.array(indices_in_light_events)]
-    print('Number of times light is matched to 0, 1, 2, 3, or >3 different charge events: ', num_matched_0,' ', num_matched_1, ' ',num_matched_2,' ', num_matched_3,' ', num_matched_more)
     return charge_events, results_light_events
         

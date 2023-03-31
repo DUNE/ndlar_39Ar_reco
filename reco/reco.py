@@ -63,6 +63,8 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
             hits_large_clusters = np.concatenate((hits_large_clusters, hits_large_clusters_temp))
             unix_pt7 = np.concatenate((unix_pt7, unix_pt7_temp))
             PPS_pt7 = np.concatenate((PPS_pt7, PPS_pt7_temp))
+    hits_small_clusters_max_cindex = np.max(hits_small_clusters['cluster_index'])+1
+    hits_large_clusters_max_cindex = np.max(hits_large_clusters['cluster_index'])+1
     return results_small_clusters, results_large_clusters,unix_pt7,PPS_pt7, hits_small_clusters, hits_large_clusters, hits_small_clusters_max_cindex, hits_large_clusters_max_cindex
 
 def reco_MC(packets, mc_assn, pixel_xy, detector):
