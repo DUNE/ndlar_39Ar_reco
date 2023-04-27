@@ -22,7 +22,7 @@ def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
     charge = (adcs.astype('float64')/float(ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)/gain * 1e-3
     return charge
 
-def PACMAN_drift(packets, detector):
+def PACMAN_drift(packets, detector, mc_assn):
     # only supports module-0
     ts = packets['timestamp'].astype('i8')
     if detector == 'module-0':
@@ -32,6 +32,9 @@ def PACMAN_drift(packets, detector):
         # assuming correction[0] is 0, certainly isn't exactly true
         correction1 = [0., 3.267e-6]
         correction2 = [0., -8.9467e-7]
+    if mc_assn is not None:
+        correction1 = [0.,0.]
+        correction2 = [0., 0.]
     mask_io1 = packets['io_group'] == 1
     mask_io2 = packets['io_group'] == 2
     ts[mask_io1] = (packets[mask_io1]['timestamp'].astype('i8') - correction1[0]) / (1. + correction1[1])

@@ -16,7 +16,7 @@ from adc64format import dtypes, ADC64Reader
 import importlib.util
 
 def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
-              mc_assn, pixel_xy, detector, hits_small_clusters_start_cindex, hits_large_clusters_start_cindex):
+              mc_assn, tracks, pixel_xy, detector, hits_small_clusters_start_cindex, hits_large_clusters_start_cindex):
     ## loop through seconds of data and do charge reconstruction
     for sec in tqdm(range(nSec_start,int(nSec_end)+1),desc=" Seconds Processed: "):
         # Grab 1s at a time to analyze, plus the next 1s.
@@ -43,7 +43,7 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
         if sec == nSec_start:
             results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7,\
                 hits_small_clusters, hits_large_clusters = analysis(packets_1sec, pixel_xy,\
-                mc_assn, detector,  hits_small_clusters_start_cindex, hits_large_clusters_start_cindex,sec)
+                mc_assn, tracks, detector,  hits_small_clusters_start_cindex, hits_large_clusters_start_cindex,sec)
         elif sec > nSec_start:
             # making sure to continously increment cluster_index as we go onto the next PPS
             hits_small_clusters_max_cindex = np.max(hits_small_clusters['cluster_index'])+1
@@ -54,7 +54,7 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
             # run reconstruction and save temporary arrays of results
             results_small_clusters_temp, results_large_clusters_temp, unix_pt7_temp, PPS_pt7_temp,\
                 hits_small_clusters_temp,hits_large_clusters_temp\
-                = analysis(packets_1sec, pixel_xy, mc_assn, detector,\
+                = analysis(packets_1sec, pixel_xy, mc_assn, tracks, detector,\
                                         hits_small_clusters_max_cindex, hits_large_clusters_max_cindex,sec)
             # concatenate temp arrays to main arrays
             results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
@@ -67,9 +67,9 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
     hits_large_clusters_max_cindex = np.max(hits_large_clusters['cluster_index'])+1
     return results_small_clusters, results_large_clusters,unix_pt7,PPS_pt7, hits_small_clusters, hits_large_clusters, hits_small_clusters_max_cindex, hits_large_clusters_max_cindex
 
-def reco_MC(packets, mc_assn, pixel_xy, detector):
+def reco_MC(packets, mc_assn, tracks, pixel_xy, detector):
     results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7,\
-        hits_small_clusters, hits_large_clusters = analysis(packets, pixel_xy, mc_assn, detector, 0, 0, 0)
+        hits_small_clusters, hits_large_clusters = analysis(packets, pixel_xy, mc_assn, tracks, detector, 0, 0, 0)
     return results_small_clusters, results_large_clusters, unix_pt7,PPS_pt7, hits_small_clusters, hits_large_clusters
 
 def run_reconstruction(input_config_filename):
@@ -131,8 +131,10 @@ def run_reconstruction(input_config_filename):
     
     # open mc_assn dataset for MC
     mc_assn=None
+    tracks=None
     try:
         mc_assn = f_packets['mc_packets_assn']
+        tracks = f_packets['tracks']
     except:
         mc_assn=None
         print("No 'mc_packets_assn' dataset found, processing as real data.")
@@ -179,7 +181,7 @@ def run_reconstruction(input_config_filename):
                 hits_large_clusters = np.concatenate((hits_large_clusters, hits_large_clusters_temp))
     else:
         results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7, hits_small_clusters,hits_large_clusters = \
-            reco_MC(packets, mc_assn, pixel_xy, detector)
+            reco_MC(packets, mc_assn, tracks, pixel_xy, detector)
     # do cuts on charge events. See toggles for cuts in consts.py.
     # if all toggles are False then this command simply returns `results` unchanged.
     #results_small_clusters = charge_event_cuts.all_charge_event_cuts(results_small_clusters)
