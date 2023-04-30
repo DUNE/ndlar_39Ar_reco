@@ -26,7 +26,6 @@ def ADC_drift(timestamps, adc, detector):
     
 def into_array(events_file_0, events_file_1, batch_size, event_dtype, detector,adc_sn_1, adc_sn_2):
     events = np.zeros((0,), dtype=event_dtype)
-    print(events_file_0.dtype)
     # loop through events in batch
     for i in range(batch_size):
         if events_file_0['time'][i] is not None and events_file_1['time'][i] is not None:

@@ -80,7 +80,10 @@ def build_charge_events_small_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gai
         x_vals_event = x_vals_all[label_mask]
         y_vals_event = y_vals_all[label_mask]
         z_vals_event = z_vals_all[label_mask]
-        event_ids_event = event_ids[label_mask]
+        if mc_assn is not None:
+            event_ids_event = event_ids[label_mask]
+        else:
+            event_ids_event = -1
         io_group_vals_event = io_group_vals_all[label_mask]
         unique_ids_event = unique_ids_all[label_mask]
         q_vals_event = q_vals_all[label_mask]
@@ -180,8 +183,10 @@ def build_charge_events_large_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gai
         unique_ids_event = unique_ids_all[label_mask]
         q_vals_event = q_vals_all[label_mask]
         unix_vals_event = unix_vals_all[label_mask]
-        event_ids_event = event_ids[label_mask]
-        
+        if mc_assn is not None:
+            event_ids_event = event_ids[label_mask]
+        else:
+            event_ids_event = -1
         # loop through hits within each event, concatenate to hits array with cluster index
         nhits = np.sum(label_mask)
         hits_event = np.zeros((nhits,), dtype=hits_dtype)
@@ -274,7 +279,10 @@ def analysis(packets,pixel_xy,mc_assn,tracks,detector,hits_small_clusters_max_ci
     unix_small_clusters = unix[noise_samples_mask]
     io_group_small_clusters = io_group[noise_samples_mask]
     unique_ids_small_clusters = unique_ids[noise_samples_mask]
-    mc_assn_small_clusters = mc_assn[noise_samples_mask]
+    if mc_assn is not None:
+        mc_assn_small_clusters = mc_assn[noise_samples_mask]
+    else:
+        mc_assn_small_clusters = None
     
     # make dtypes for datasets
     event_small_clusters_dtype = np.dtype([('nhit', '<i4'), ('q', '<f8'),('io_group', 'i4'),\
@@ -304,7 +312,10 @@ def analysis(packets,pixel_xy,mc_assn,tracks,detector,hits_small_clusters_max_ci
     unix_large_clusters = unix[noise_samples_mask_inverted]
     io_group_large_clusters = io_group[noise_samples_mask_inverted]
     unique_ids_large_clusters = unique_ids[noise_samples_mask_inverted]
-    mc_assn_large_clusters = mc_assn[noise_samples_mask_inverted]
+    if mc_assn is not None:
+        mc_assn_large_clusters = mc_assn[noise_samples_mask_inverted]
+    else:
+        mc_assn_large_clusters = None
     
     event_large_clusters_dtype = np.dtype([('nhit', '<i4'), ('q', '<f8'),('io_group', '<i4'),\
                             ('t_max', '<i8'), ('t_min', '<i8'),\
@@ -315,8 +326,10 @@ def analysis(packets,pixel_xy,mc_assn,tracks,detector,hits_small_clusters_max_ci
             build_charge_events_large_clusters(labels_large_clusters,dataword_large_clusters,txyz_large_clusters,\
             v_ref=v_ref_large_clusters,v_cm=v_cm_large_clusters,v_ped=v_ped_large_clusters,\
             gain=gain_large_clusters, unix=unix_large_clusters, io_group=io_group_large_clusters,\
-            unique_ids=unique_ids_large_clusters,event_dtype=event_large_clusters_dtype,hits_size=hits_large_clusters_max_cindex,\
-            hits_dtype=hits_dtype, second=sec,mc_assn=mc_assn_large_clusters, tracks=tracks)
+            unique_ids=unique_ids_large_clusters,event_dtype=event_large_clusters_dtype,\
+            hits_size=hits_large_clusters_max_cindex,\
+            hits_dtype=hits_dtype, second=sec,\
+            mc_assn=mc_assn_large_clusters, tracks=tracks)
     else:
         results_large_clusters = np.zeros((0,), dtype=event_large_clusters_dtype)
         hits_large_clusters = np.zeros((0,), dtype=hits_dtype)

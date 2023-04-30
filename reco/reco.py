@@ -165,13 +165,13 @@ def run_reconstruction(input_config_filename):
                 results_small_clusters, results_large_clusters, unix_pt7, \
                 PPS_pt7, hits_small_clusters,hits_large_clusters,\
                 hits_small_clusters_start_cindex, hits_large_clusters_start_cindex = \
-                reco_loop(nSec_start, nSec_end, PPS_indices, packets_io, mc_assn, pixel_xy, detector,\
+                reco_loop(nSec_start, nSec_end, PPS_indices, packets_io, mc_assn, tracks, pixel_xy, detector,\
                     hits_small_clusters_start_cindex, hits_large_clusters_start_cindex)
             else:
                 results_small_clusters_temp, results_large_clusters_temp, unix_pt7_temp, \
                     PPS_pt7_temp, hits_small_clusters_temp,hits_large_clusters_temp,\
                     hits_small_clusters_start_cindex, hits_large_clusters_start_cindex = \
-                    reco_loop(nSec_start, nSec_end, PPS_indices, packets_io, mc_assn, pixel_xy, detector,\
+                    reco_loop(nSec_start, nSec_end, PPS_indices, packets_io, mc_assn, tracks, pixel_xy, detector,\
                         hits_small_clusters_start_cindex, hits_large_clusters_start_cindex)
                 results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
                 results_large_clusters = np.concatenate((results_large_clusters, results_large_clusters_temp))

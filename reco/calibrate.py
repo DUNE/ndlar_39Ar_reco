@@ -60,7 +60,7 @@ def timestamp_corrector(packets, mc_assn, unix, detector):
         packets = packets[timestamp_data_cut]
         unix = unix[timestamp_data_cut]
     if mc_assn is None and PACMAN_clock_correction:
-        ts = PACMAN_drift(packets, detector).astype('i8')
+        ts = PACMAN_drift(packets, detector, mc_assn).astype('i8')
     
     return ts, packets, mc_assn, unix
 
