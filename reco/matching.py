@@ -60,10 +60,10 @@ def match_light_to_charge(light_events, charge_events, PPS_ext_triggers, unix_ex
         unix_ext_trigger = unix_ext_triggers[i]
         light_event['light_unique_id'] = i
         if cluster_type == 0:
-            matched_events_PPS = (charge_event_ns > PPS_ext_trigger) & (charge_event_ns < PPS_ext_trigger + PPS_window)
+            matched_events_PPS = (charge_event_ns > PPS_ext_trigger - 0.25*PPS_window) & (charge_event_ns < PPS_ext_trigger + 1.25*PPS_window)
             matched_events_unix = (charge_event_unix > unix_ext_trigger-unix_window) & (charge_event_unix < unix_ext_trigger + unix_window)
         elif cluster_type == 1:
-            matched_events_PPS = (charge_event_ns_min > PPS_ext_trigger) & (charge_event_ns_max < PPS_ext_trigger + PPS_window)
+            matched_events_PPS = (charge_event_ns_min > PPS_ext_trigger - 0.25*PPS_window) & (charge_event_ns_max < PPS_ext_trigger + 1.25*PPS_window)
             matched_events_unix = (charge_event_unix > unix_ext_trigger-unix_window) & (charge_event_unix < unix_ext_trigger + unix_window)
         matched_events = (matched_events_PPS) & (matched_events_unix)
         matched_events_indices = np.where(matched_events)[0]
