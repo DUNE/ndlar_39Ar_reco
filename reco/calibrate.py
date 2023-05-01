@@ -28,6 +28,9 @@ def PACMAN_drift(packets, detector, mc_assn):
     if detector == 'module-0':
         correction1 = [-9.597, 4.0021e-6]
         correction2 = [-9.329, 1.1770e-6]
+    elif detector == 'module-1':
+        correction1 = [0.,0.]
+        correction2 = [0., 0.]
     elif detector == 'module-3':
         # assuming correction[0] is 0, certainly isn't exactly true
         correction1 = [0., 3.267e-6]
@@ -79,6 +82,9 @@ def pedestal_and_config(unique_ids, mc_assn, detector):
     if detector == 'module-0':
         pedestal_file = 'pedestal/module-0/datalog_2021_04_02_19_00_46_CESTevd_ped.json'
         config_file = 'config/module-0/evd_config_21-03-31_12-36-13.json'
+    elif detector == 'module-1':
+        pedestal_file = 'pedestal/module-1/packet_2022_02_08_01_40_31_CETevd_ped.json'
+        config_file = 'config/module-1/config_22-02-08_13-37-39.json'
     elif detector == 'module-3':
         pedestal_file = 'pedestal/module-3/pedestal-diagnostic-packet-2023_01_28_22_33_CETevd_ped.json'
         config_file = 'config/module-3/evd_config_23-01-29_11-12-16.json'
