@@ -60,7 +60,7 @@ def build_charge_events_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix
             try:
                 event_id = tracks[index]['eventID']
             except:
-                print('index = ', index)
+                event_id = tracks[index]['spillID']
             event_ids[i] = event_id
     else:
         event_ids = np.ones_like(len(txyz))*-1

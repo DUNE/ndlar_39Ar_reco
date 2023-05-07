@@ -98,8 +98,8 @@ def run_reconstruction(input_config_filename):
     input_packets_filepath = input_packets_filename
     output_events_filepath = output_events_filename
     
-    if detector not in ['module-0','module-1', 'module-3']:
-        raise Exception("Possible values of 'detector' are only 'module-0', 'module-1', and 'module-3' (without quotes).")
+    if detector not in ['module-0','module-1', 'module-3','2x2']:
+        raise Exception("Possible values of 'detector' are only 'module-0', 'module-1', 'module-3', and '2x2' (without quotes).")
     if os.path.exists(output_events_filepath):
         raise Exception('Output file '+ str(output_events_filepath) + ' already exists.')
     if nSec_start <= 0 or nSec_start - int(nSec_start) or nSec_end < -1 or nSec_end - int(nSec_end) > 0:
@@ -114,6 +114,8 @@ def run_reconstruction(input_config_filename):
         dict_path = 'layout/module-1/module1_layout-2.3.16.pkl'
     elif detector == 'module-3':
         dict_path = 'layout/module-3/multi_tile_layout-module3.pkl'
+    elif detector == '2x2':
+        dict_path = 'layout/2x2/multi_tile_layout-2.3.16_2x2.pkl'
     pixel_xy = load_geom_dict(dict_path)
     print('Using pixel layout dictionary: ', dict_path)
     

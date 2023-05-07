@@ -79,13 +79,13 @@ def pedestal_and_config(unique_ids, mc_assn, detector):
     #       note: mc_truth information for simulation (None for data)
     # Returns:
     #   v_ped, v_cm, v_ref, gain arrays; size of packets dataset
-    if detector == 'module-0':
+    if detector == 'module-0' and use_ped_config_files:
         pedestal_file = 'pedestal/module-0/datalog_2021_04_02_19_00_46_CESTevd_ped.json'
         config_file = 'config/module-0/evd_config_21-03-31_12-36-13.json'
-    elif detector == 'module-1':
+    elif detector == 'module-1' and use_ped_config_files:
         pedestal_file = 'pedestal/module-1/packet_2022_02_08_01_40_31_CETevd_ped.json'
         config_file = 'config/module-1/config_22-02-08_13-37-39.json'
-    elif detector == 'module-3':
+    elif detector == 'module-3' and use_ped_config_files:
         pedestal_file = 'pedestal/module-3/pedestal-diagnostic-packet-2023_01_28_22_33_CETevd_ped.json'
         config_file = 'config/module-3/evd_config_23-01-29_11-12-16.json'
 
@@ -96,15 +96,15 @@ def pedestal_and_config(unique_ids, mc_assn, detector):
     pedestal_dict = defaultdict(lambda: dict(
         pedestal_mv=580
     ))
+    if use_ped_config_files:
+        # reading the data from the file
+        with open(pedestal_file,'r') as infile:
+            for key, value in json.load(infile).items():
+                pedestal_dict[key] = value
 
-    # reading the data from the file
-    with open(pedestal_file,'r') as infile:
-        for key, value in json.load(infile).items():
-            pedestal_dict[key] = value
-
-    with open(config_file, 'r') as infile:
-        for key, value in json.load(infile).items():
-            config_dict[key] = value
+        with open(config_file, 'r') as infile:
+            for key, value in json.load(infile).items():
+                config_dict[key] = value
   
     v_ped,v_cm,v_ref,gain = np.zeros_like(unique_ids,dtype='float64'),np.zeros_like(unique_ids,dtype='float64'),np.zeros_like(unique_ids,dtype='float64'),np.ones_like(unique_ids,dtype='float64')
 
