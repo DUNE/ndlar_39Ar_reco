@@ -39,14 +39,10 @@ def match_light_to_ext_trigger(events, PPS_charge, unix_charge, matching_toleran
     print('Total matched triggers based on PPS only = ', np.sum(matched_triggers_PPS), ' out of ', len(unix_charge), ' total triggers.')
     return indices_in_ext_triggers
     
-def match_light_to_charge(light_events, charge_events, PPS_ext_triggers, unix_ext_triggers, cluster_type):
+def match_light_to_charge(light_events, charge_events, PPS_ext_triggers, unix_ext_triggers):
     ### match light triggers to charge events
-    # cluster type: 0 for small clusters, 1 for large clusters
-    if cluster_type == 0:
-        charge_event_ns = charge_events['t']
-    elif cluster_type == 1:
-        charge_event_ns_min = charge_events['t_min']
-        charge_event_ns_max = charge_events['t_max']
+    charge_event_ns_min = charge_events['t_min']
+    charge_event_ns_max = charge_events['t_max']
     charge_event_unix = charge_events['unix']
     
     PPS_window = int(drift_distance / v_drift * 1e3)
@@ -59,12 +55,9 @@ def match_light_to_charge(light_events, charge_events, PPS_ext_triggers, unix_ex
         PPS_ext_trigger = PPS_ext_triggers[i]
         unix_ext_trigger = unix_ext_triggers[i]
         light_event['light_unique_id'] = i
-        if cluster_type == 0:
-            matched_events_PPS = (charge_event_ns > PPS_ext_trigger - 0.25*PPS_window) & (charge_event_ns < PPS_ext_trigger + 1.25*PPS_window)
-            matched_events_unix = (charge_event_unix > unix_ext_trigger-unix_window) & (charge_event_unix < unix_ext_trigger + unix_window)
-        elif cluster_type == 1:
-            matched_events_PPS = (charge_event_ns_min > PPS_ext_trigger - 0.25*PPS_window) & (charge_event_ns_max < PPS_ext_trigger + 1.25*PPS_window)
-            matched_events_unix = (charge_event_unix > unix_ext_trigger-unix_window) & (charge_event_unix < unix_ext_trigger + unix_window)
+        
+        matched_events_PPS = (charge_event_ns_min > PPS_ext_trigger - 0.25*PPS_window) & (charge_event_ns_max < PPS_ext_trigger + 1.25*PPS_window)
+        matched_events_unix = (charge_event_unix > unix_ext_trigger-unix_window) & (charge_event_unix < unix_ext_trigger + unix_window)
         matched_events = (matched_events_PPS) & (matched_events_unix)
         matched_events_indices = np.where(matched_events)[0]
         if len(matched_events_indices) > 0:

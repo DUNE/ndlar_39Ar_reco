@@ -16,17 +16,15 @@ gain_sim = 1/221 # mV/e-, make sure to match simulation file
 gain_data = 1/221 # mV/e-
 
 # DBSCAN parameters
-eps_tracks = 20 ## mm
-min_samples_tracks = 8
-
-eps_noise = 10 ## mm
-min_samples_noise = 1
+eps = 300 ## mm
+min_samples = 1
 
 # Toggles for cuts and calibrations
 timestamp_cut = True
 PACMAN_clock_correction = True
 use_charge_event_drift_window_cut = False
 use_pixel_plane_cut = False
+use_ped_config_files = False
 
 # light
 adc_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/light_data/'

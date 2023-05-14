@@ -16,7 +16,7 @@ from adc64format import dtypes, ADC64Reader
 import importlib.util
 
 def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
-              mc_assn, tracks, pixel_xy, detector, hits_small_clusters_start_cindex, hits_large_clusters_start_cindex):
+              mc_assn, tracks, pixel_xy, detector, hits_clusters_start_cindex):
     ## loop through seconds of data and do charge reconstruction
     for sec in tqdm(range(nSec_start,int(nSec_end)+1),desc=" Seconds Processed: "):
         # Grab 1s at a time to analyze, plus the next 1s.
@@ -41,36 +41,32 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
         # run reconstruction on selected packets.
         # this block is be run first and thus defines all the arrays for concatenation later.
         if sec == nSec_start:
-            results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7,\
-                hits_small_clusters, hits_large_clusters = analysis(packets_1sec, pixel_xy,\
-                mc_assn, tracks, detector,  hits_small_clusters_start_cindex, hits_large_clusters_start_cindex,sec)
+            results_clusters, unix_pt7, PPS_pt7,\
+                hits_clusters = analysis(packets_1sec, pixel_xy,\
+                mc_assn, tracks, detector, hits_clusters_start_cindex,sec)
         elif sec > nSec_start:
             # making sure to continously increment cluster_index as we go onto the next PPS
-            hits_small_clusters_max_cindex = np.max(hits_small_clusters['cluster_index'])+1
-            if np.size(hits_large_clusters['cluster_index']) > 0:
-                hits_large_clusters_max_cindex = np.max(hits_large_clusters['cluster_index'])+1
+            if np.size(hits_clusters['cluster_index']) > 0:
+                hits_clusters_max_cindex = np.max(hits_clusters['cluster_index'])+1
             else:
-                hits_large_clusters_max_cindex = 0
+                hits_clusters_max_cindex = 0
             # run reconstruction and save temporary arrays of results
-            results_small_clusters_temp, results_large_clusters_temp, unix_pt7_temp, PPS_pt7_temp,\
-                hits_small_clusters_temp,hits_large_clusters_temp\
+            results_clusters_temp, unix_pt7_temp, PPS_pt7_temp,\
+                hits_clusters_temp\
                 = analysis(packets_1sec, pixel_xy, mc_assn, tracks, detector,\
-                                        hits_small_clusters_max_cindex, hits_large_clusters_max_cindex,sec)
+                                        hits_clusters_max_cindex,sec)
             # concatenate temp arrays to main arrays
-            results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
-            results_large_clusters = np.concatenate((results_large_clusters, results_large_clusters_temp))
-            hits_small_clusters = np.concatenate((hits_small_clusters, hits_small_clusters_temp))
-            hits_large_clusters = np.concatenate((hits_large_clusters, hits_large_clusters_temp))
+            results_clusters = np.concatenate((results_clusters, results_clusters_temp))
+            hits_clusters = np.concatenate((hits_clusters, hits_clusters_temp))
             unix_pt7 = np.concatenate((unix_pt7, unix_pt7_temp))
             PPS_pt7 = np.concatenate((PPS_pt7, PPS_pt7_temp))
-    hits_small_clusters_max_cindex = np.max(hits_small_clusters['cluster_index'])+1
-    hits_large_clusters_max_cindex = np.max(hits_large_clusters['cluster_index'])+1
-    return results_small_clusters, results_large_clusters,unix_pt7,PPS_pt7, hits_small_clusters, hits_large_clusters, hits_small_clusters_max_cindex, hits_large_clusters_max_cindex
+    hits_clusters_max_cindex = np.max(hits_clusters['cluster_index'])+1
+    return results_clusters,unix_pt7,PPS_pt7, hits_clusters, hits_clusters_max_cindex
 
 def reco_MC(packets, mc_assn, tracks, pixel_xy, detector):
-    results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7,\
-        hits_small_clusters, hits_large_clusters = analysis(packets, pixel_xy, mc_assn, tracks, detector, 0, 0, 0)
-    return results_small_clusters, results_large_clusters, unix_pt7,PPS_pt7, hits_small_clusters, hits_large_clusters
+    results_clusters, unix_pt7, PPS_pt7,\
+        hits_clusters = analysis(packets, pixel_xy, mc_assn, tracks, detector, 0, 0)
+    return results_clusters, unix_pt7,PPS_pt7, hits_clusters
 
 def run_reconstruction(input_config_filename):
     ## main function
@@ -102,8 +98,8 @@ def run_reconstruction(input_config_filename):
     input_packets_filepath = input_packets_filename
     output_events_filepath = output_events_filename
     
-    if detector not in ['module-0', 'module-3']:
-        raise Exception("Possible values of 'detector' are only 'module-0' and 'module-3' (without quotes).")
+    if detector not in ['module-0','module-1', 'module-3','2x2']:
+        raise Exception("Possible values of 'detector' are only 'module-0', 'module-1', 'module-3', and '2x2' (without quotes).")
     if os.path.exists(output_events_filepath):
         raise Exception('Output file '+ str(output_events_filepath) + ' already exists.')
     if nSec_start <= 0 or nSec_start - int(nSec_start) or nSec_end < -1 or nSec_end - int(nSec_end) > 0:
@@ -114,8 +110,12 @@ def run_reconstruction(input_config_filename):
     # load dictionary for calculating hit position on pixel plane. Made using larpix-readout-parser.
     if detector == 'module-0':
         dict_path = 'layout/module-0/multi_tile_layout-2.3.16.pkl'
+    elif detector == 'module-1':
+        dict_path = 'layout/module-1/module1_layout-2.3.16.pkl'
     elif detector == 'module-3':
         dict_path = 'layout/module-3/multi_tile_layout-module3.pkl'
+    elif detector == '2x2':
+        dict_path = 'layout/2x2/multi_tile_layout-2.3.16_2x2.pkl'
     pixel_xy = load_geom_dict(dict_path)
     print('Using pixel layout dictionary: ', dict_path)
     
@@ -147,7 +147,7 @@ def run_reconstruction(input_config_filename):
     
     # run reconstruction
     if mc_assn is None:
-        hits_small_clusters_start_cindex, hits_large_clusters_start_cindex = 0,0
+        hits_clusters_start_cindex = 0
         io_groups = np.unique(packets['io_group'])
         for io in tqdm(io_groups, desc = 'Processing io_groups: '):
             packets_io = packets[packets['io_group'] == io]
@@ -162,25 +162,23 @@ def run_reconstruction(input_config_filename):
             if nSec_start > len(PPS_indices)-1:
                 raise ValueError('nSec_start is greater than possible values of seconds. Set nSec_start to be smaller.')
             if io == io_groups[0]:
-                results_small_clusters, results_large_clusters, unix_pt7, \
-                PPS_pt7, hits_small_clusters,hits_large_clusters,\
-                hits_small_clusters_start_cindex, hits_large_clusters_start_cindex = \
+                results_clusters, unix_pt7, \
+                PPS_pt7, hits_clusters,\
+                hits_clusters_start_cindex = \
                 reco_loop(nSec_start, nSec_end, PPS_indices, packets_io, mc_assn, tracks, pixel_xy, detector,\
-                    hits_small_clusters_start_cindex, hits_large_clusters_start_cindex)
+                    hits_clusters_start_cindex)
             else:
-                results_small_clusters_temp, results_large_clusters_temp, unix_pt7_temp, \
-                    PPS_pt7_temp, hits_small_clusters_temp,hits_large_clusters_temp,\
-                    hits_small_clusters_start_cindex, hits_large_clusters_start_cindex = \
+                results_clusters_temp, unix_pt7_temp, \
+                    PPS_pt7_temp, hits_clusters_temp,\
+                    hits_clusters_start_cindex = \
                     reco_loop(nSec_start, nSec_end, PPS_indices, packets_io, mc_assn, tracks, pixel_xy, detector,\
-                        hits_small_clusters_start_cindex, hits_large_clusters_start_cindex)
-                results_small_clusters = np.concatenate((results_small_clusters, results_small_clusters_temp))
-                results_large_clusters = np.concatenate((results_large_clusters, results_large_clusters_temp))
+                        hits_clusters_start_cindex)
+                results_clusters = np.concatenate((results_clusters, results_clusters_temp))
                 unix_pt7 = np.concatenate((unix_pt7, unix_pt7_temp))
                 PPS_pt7 = np.concatenate((PPS_pt7, PPS_pt7_temp))
-                hits_small_clusters = np.concatenate((hits_small_clusters, hits_small_clusters_temp))
-                hits_large_clusters = np.concatenate((hits_large_clusters, hits_large_clusters_temp))
+                hits_clusters = np.concatenate((hits_clusters, hits_clusters_temp))
     else:
-        results_small_clusters, results_large_clusters, unix_pt7, PPS_pt7, hits_small_clusters,hits_large_clusters = \
+        results_clusters, unix_pt7, PPS_pt7, hits_clusters = \
             reco_MC(packets, mc_assn, tracks, pixel_xy, detector)
     # do cuts on charge events. See toggles for cuts in consts.py.
     # if all toggles are False then this command simply returns `results` unchanged.
@@ -209,31 +207,21 @@ def run_reconstruction(input_config_filename):
         PPS_pt7_light = PPS_pt7[indices_in_ext_triggers]
         unix_pt7_light = unix_pt7[indices_in_ext_triggers]
         
-        # match ext triggers / light events to charge events for the small clusters
-        print('Performing charge-light matching for the small clusters...')
-        results_small_clusters, results_small_clusters_light_events = matching.match_light_to_charge(light_events_all, results_small_clusters, PPS_pt7_light, unix_pt7_light,0)
-        
         # match ext triggers / light events to charge events for the large clusters
-        print('Performing charge-light matching for the large clusters...')
-        results_large_clusters, results_large_clusters_light_events = matching.match_light_to_charge(light_events_all, results_large_clusters, PPS_pt7_light, unix_pt7_light,1)
+        print('Performing charge-light matching for the charge clusters...')
+        results_clusters, results_clusters_light_events = matching.match_light_to_charge(light_events_all, results_clusters, PPS_pt7_light, unix_pt7_light)
     else:
         print('Skipping getting light events and doing charge-light matching...')
     
     print('Saving events to ', output_events_filepath)
     with h5py.File(output_events_filepath, 'w') as f:
-        dset_small_clusters = f.create_dataset('small_clusters', data=results_small_clusters, dtype=results_small_clusters.dtype)
-        dset_hits_small_clusters = f.create_dataset('small_clusters_hits', data=hits_small_clusters, dtype=hits_small_clusters.dtype)
+        dset_hits_clusters = f.create_dataset('clusters_hits', data=hits_clusters, dtype=hits_clusters.dtype)
         if do_match_of_charge_to_light:
-            dset_light_events = f.create_dataset('small_clusters_matched_light', data=results_small_clusters_light_events, dtype=results_small_clusters_light_events.dtype)
-            dset_light_events = f.create_dataset('large_clusters_matched_light', data=results_large_clusters_light_events, dtype=results_large_clusters_light_events.dtype)
-        dset_large_clusters = f.create_dataset('large_clusters', data=results_large_clusters, dtype=results_large_clusters.dtype)
-        dset_hits_large_clusters = f.create_dataset('large_clusters_hits', data=hits_large_clusters, dtype=hits_large_clusters.dtype)
+            dset_light_events = f.create_dataset('clusters_matched_light', data=results_clusters_light_events, dtype=results_clusters_light_events.dtype)
+        dset_clusters = f.create_dataset('clusters', data=results_clusters, dtype=results_clusters.dtype)
     
     analysis_end = time.time()
     print('Time to do full analysis = ', analysis_end-analysis_start, ' seconds')
-    if np.size(mc_assn) == 0:
-        print('Total small clusters = ', len(results_small_clusters), ' with a rate of ', len(results_small_clusters)/(nSec_end-nSec_start), ' Hz')
-        print('Total large clusters = ', len(results_large_clusters), ' with a rate of ', len(results_large_clusters)/(nSec_end - nSec_start), ' Hz')
 
 if __name__ == "__main__":
     fire.Fire(run_reconstruction)
