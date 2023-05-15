@@ -27,16 +27,26 @@ def cluster_packets(eps,min_samples,txyz):
     txyz_noncoresamples = np.array(txyz)[noncore_samples_mask]
     return txyz_coresamples, txyz_noise, txyz_noncoresamples,db
 
+def getEventIDs(txyz, mc_assn, tracks, event_ids):
+    for i in range(len(txyz)):
+        index = int(mc_assn[i][0][0])
+        try:
+            event_id = tracks[index]['eventID']
+        except:
+            event_id = tracks[index]['spillID']
+        event_ids[i] = event_id
+
 def build_charge_events_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix,io_group,unique_ids,event_dtype,\
                                       hits_size, hits_dtype,second,mc_assn,tracks):
-    ### Build charge events by adding up packet charge from individual DBSCAN clusters
+    ### Make hits and clusters datasets from DBSCAN clusters and corresponding hits
     # Inputs: 
-    #   labels_noise_list: list of noise labels from DBSCAN
+    #   labels: list of labels from DBSCAN
     #   dataword: packet ADC counts
     #   unique_ids: unique id for each pixel corresponding to the packets
     #   v_ref, v_cm, v_ped, gain: arrays providing pixel parameters for ADC->ke- conversion
+    #   ...
     # Outputs:
-    #   results: array containing event information
+    #   results: array containing dataset arrays
 
     charge = adcs_to_ke(dataword, v_ref,v_cm,v_ped,gain)
     q_vals = np.bincount(labels, weights=charge)
@@ -44,6 +54,7 @@ def build_charge_events_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix
     
     hits = np.zeros((0,), dtype=hits_dtype)
     
+    # arrays of values corresponding to hits
     t_vals_all = txyz[:,0]
     x_vals_all = txyz[:,1]
     y_vals_all = txyz[:,2]
@@ -53,50 +64,32 @@ def build_charge_events_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix
     q_vals_all = charge
     unix_vals_all = unix
     
+    # get event IDs if MC
     event_ids = np.zeros(len(txyz))
     if mc_assn is not None:
-        for i in range(len(txyz)):
-            index = int(mc_assn[i][0][0])
-            try:
-                event_id = tracks[index]['eventID']
-            except:
-                event_id = tracks[index]['spillID']
-            event_ids[i] = event_id
+        getEventIDs(txyz, mc_assn, tracks, event_ids)
     else:
         event_ids = np.ones_like(len(txyz))*-1
+    start = time.time()
     
-    # loop through unique labels (charge events) to make hits dataset
+    # add new hits to hits-array
     unique_labels = np.unique(labels)
-    for i in range(hits_size, len(unique_labels)+hits_size):
-        label = unique_labels[i - hits_size]
-        label_mask = labels == label
-        t_vals_event = t_vals_all[label_mask]
-        x_vals_event = x_vals_all[label_mask]
-        y_vals_event = y_vals_all[label_mask]
-        z_vals_event = z_vals_all[label_mask]
-        io_group_vals_event = io_group_vals_all[label_mask]
-        unique_ids_event = unique_ids_all[label_mask]
-        q_vals_event = q_vals_all[label_mask]
-        unix_vals_event = unix_vals_all[label_mask]
-        if mc_assn is not None:
-            event_ids_event = event_ids[label_mask]
-        else:
-            event_ids_event = -1
-        # loop through hits within each event, concatenate to hits array with cluster index
-        nhits = np.sum(label_mask)
-        hits_event = np.zeros((nhits,), dtype=hits_dtype)
-        hits_event['q'] = q_vals_event
-        hits_event['io_group'] = io_group_vals_event
-        hits_event['t'] = t_vals_event/(v_drift*1e1) * 1e3
-        hits_event['t_abs'] = t_vals_event/(v_drift*1e1) * 1e3 + second*1e9
-        hits_event['x'] = x_vals_event
-        hits_event['y'] = y_vals_event
-        hits_event['z'] = z_vals_event
-        hits_event['unique_id'] = unique_ids_event
-        hits_event['unix'] = unix_vals_event
-        hits_event['cluster_index'] = np.ones(nhits)*i
-        hits_event['edep_event_ids'] = event_ids_event
-        hits = np.concatenate((hits, hits_event))
+    nhits = np.size(labels)
+    hits_temp = np.zeros((nhits,), dtype=hits_dtype)
+    hits_temp['q'] = q_vals_all
+    hits_temp['io_group'] = io_group_vals_all
+    hits_temp['t'] = t_vals_all/(v_drift*1e1) * 1e3
+    hits_temp['t_abs'] = t_vals_all/(v_drift*1e1) * 1e3 + second*1e9
+    hits_temp['x'] = x_vals_all
+    hits_temp['y'] = y_vals_all
+    hits_temp['z'] = z_vals_all
+    hits_temp['unique_id'] = unique_ids_all
+    hits_temp['unix'] = unix_vals_all
+    labels_global = np.copy(labels)
+    labels_global[labels_global != -1] += hits_size
+    hits_temp['cluster_index'] = labels_global
+    hits_temp['edep_event_ids'] = event_ids
+    hits = np.concatenate((hits, hits_temp))
     
     timestamps = txyz[:,0]
     x_vals = txyz[:,1]
