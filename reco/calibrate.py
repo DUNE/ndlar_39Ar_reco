@@ -121,4 +121,5 @@ def pedestal_and_config(unique_ids, mc_assn, detector):
             v_cm[i] = v_cm_sim
             v_ref[i] = v_ref_sim
             gain[i] = gain_sim
+    
     return v_ped, v_cm, v_ref, gain

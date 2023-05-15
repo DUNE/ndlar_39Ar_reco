@@ -1,6 +1,7 @@
 import pickle
 from calibrate import timestamp_corrector
 from consts import *
+import numpy as np
 
 def load_geom_dict(geom_dict_path):
     ## load geometry dictionary for pixel positions
@@ -9,14 +10,14 @@ def load_geom_dict(geom_dict_path):
     return geom_dict
 
 def zip_pixel_tyz(packets,ts, pixel_xy):
-    ## form zipped array to use in larnd-sim. Maybe this can be made without a for loop? FIXME?
+    ## form zipped array using info from dictionary to use in clustering
     ts_inmm = v_drift*1e1*ts*0.1 # timestamp in us * drift speed in mm/us
-    txyz = []
-    for i in range(len(packets)):
-        try:
-            xyz = pixel_xy[packets['io_group'][i],packets['io_channel'][i],packets['chip_id'][i],packets['channel_id'][i]]
-            txyz.append([ts_inmm[i],xyz[0],xyz[1],xyz[2]])
-        except:
-            txyz.append([ts_inmm[i],0.0,0.0,0.0])
+    io_group = packets['io_group']
+    io_channel = packets['io_channel']
+    chip_id = packets['chip_id']
+    channel_id = packets['channel_id']
+    keys = np.stack((io_group, io_channel, chip_id, channel_id), axis=-1)
+    xyz_values = np.array([pixel_xy.get(tuple(key), [0.0, 0.0, 0.0,0.0]) for key in keys])
+    txyz = np.hstack((ts_inmm[:, np.newaxis], xyz_values))
     return txyz
 

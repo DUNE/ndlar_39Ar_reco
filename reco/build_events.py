@@ -12,20 +12,9 @@ import h5py
 def cluster_packets(eps,min_samples,txyz):
     ### Cluster packets into charge events
     # INPUT: DBSCAN parameters (eps: mm; min_samples: int), packet txyz list
-    # OUTPUT: txyz values for core, noise, and noncore samples. And returns DBSCAN fit db.
-    db = DBSCAN(eps=eps, min_samples=min_samples).fit(txyz) 
-    # core samples
-    core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-    core_samples_mask[db.core_sample_indices_] = True
-    txyz_coresamples = np.array(txyz)[core_samples_mask]
-    # noise samples
-    noise_samples_mask = db.labels_ == -1
-    txyz_noise = np.array(txyz)[noise_samples_mask]
-    # non-core samples
-    coreplusnoise_samples_mask = core_samples_mask + noise_samples_mask
-    noncore_samples_mask = np.invert(coreplusnoise_samples_mask)
-    txyz_noncoresamples = np.array(txyz)[noncore_samples_mask]
-    return txyz_coresamples, txyz_noise, txyz_noncoresamples,db
+    # OUTPUT: DBSCAN fit db.
+    db = DBSCAN(eps=eps, min_samples=min_samples,n_jobs=-1).fit(txyz) 
+    return db
 
 def getEventIDs(txyz, mc_assn, tracks, event_ids):
     for i in range(len(txyz)):
@@ -70,7 +59,6 @@ def build_charge_events_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix
         getEventIDs(txyz, mc_assn, tracks, event_ids)
     else:
         event_ids = np.ones_like(len(txyz))*-1
-    start = time.time()
     
     # add new hits to hits-array
     unique_labels = np.unique(labels)
@@ -102,15 +90,13 @@ def build_charge_events_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix
     label_x = np.split(x_vals, label_indices[1:-1])
     label_y = np.split(y_vals, label_indices[1:-1])
     
-    min_timestamps = np.array([np.min(t) for t in label_timestamps], dtype='i8')
-    max_timestamps = np.array([np.max(t) for t in label_timestamps], dtype='i8')
+    min_timestamps = np.array(list(map(np.min, label_timestamps)), dtype='i8')
+    max_timestamps = np.array(list(map(np.max, label_timestamps)), dtype='i8')
+    min_x = np.array(list(map(np.min, label_x)), dtype='i8')
+    max_x = np.array(list(map(np.max, label_x)), dtype='i8')
+    min_y = np.array(list(map(np.min, label_y)), dtype='i8')
+    max_y = np.array(list(map(np.max, label_y)), dtype='i8')
     
-    min_x = np.array([np.min(x) for x in label_x], dtype='i8')
-    max_x = np.array([np.max(x) for x in label_x], dtype='i8')
-    
-    min_y = np.array([np.min(y) for y in label_y], dtype='i8')
-    max_y = np.array([np.max(y) for y in label_y], dtype='i8')
-
     # save array of event information
     n_vals = np.bincount(labels)
     #t_vals = np.bincount(labels, weights=txyz[:,0])[n_vals != 0] # add up x values of hits in cluster then avg
@@ -160,13 +146,14 @@ def analysis(packets,pixel_xy,mc_assn,tracks,detector,hits_clusters_max_cindex,s
     
     # zip up y, z, and t values for clustering
     txyz = zip_pixel_tyz(packets,ts, pixel_xy)
-    v_ped, v_cm, v_ref, gain, unique_ids = calibrations(packets, mc_assn, detector)
     
+    v_ped, v_cm, v_ref, gain, unique_ids = calibrations(packets, mc_assn, detector)
     # cluster packets to find track-like charge events
-    txyz_core, txyz_noise, txyz_noncore, db = cluster_packets(eps, min_samples, txyz)
+    db = cluster_packets(eps, min_samples, txyz)
+    
     labels = db.labels_
     noise_samples_mask = db.labels_ == -1
-    
+   
     hits_dtype = np.dtype([('q', '<f8'),('io_group', '<i4'),('unique_id', 'i4'),\
                             ('t', '<i8'),('t_abs','<i8'),('x', '<f8'), ('y', '<f8'), ('z', '<f8'),\
                             ('unix', '<i8'), ('cluster_index', '<i4'),('edep_event_ids', '<i4')])
@@ -175,7 +162,7 @@ def analysis(packets,pixel_xy,mc_assn,tracks,detector,hits_clusters_max_cindex,s
     noise_samples_mask_inverted = np.invert(noise_samples_mask)
     labels_clusters = labels[noise_samples_mask_inverted]
     dataword_clusters = np.array(dataword)[noise_samples_mask_inverted]
-    txyz_clusters = np.array(txyz)[noise_samples_mask_inverted]
+    txyz_clusters = txyz[noise_samples_mask_inverted]
     v_ref_clusters = v_ref[noise_samples_mask_inverted]
     v_cm_clusters = v_cm[noise_samples_mask_inverted]
     v_ped_clusters = v_ped[noise_samples_mask_inverted]
