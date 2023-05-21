@@ -116,6 +116,8 @@ def build_charge_events_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix
     results['x_max'] = max_x
     results['y_min'] = min_y
     results['y_max'] = max_y
+    results['t_abs_min'] = min_timestamps/(v_drift*1e1) * 1e3 + second*1e9
+    results['t_abs_max'] = max_timestamps/(v_drift*1e1) * 1e3 + second*1e9
     results['matched'] = np.zeros(len(n_vals), dtype='i4')
     results['light_index'] = np.ones(len(n_vals), dtype='i4')*-1
     return results, hits
@@ -177,7 +179,7 @@ def analysis(packets,pixel_xy,mc_assn,tracks,detector,hits_clusters_max_cindex,s
     
     event_clusters_dtype = np.dtype([('nhit', '<i4'), ('q', '<f8'),('io_group', '<i4'),\
                             ('t_max', '<i8'), ('t_min', '<i8'),('x_max', '<f8'), ('x_min', '<f8'),
-                            ('y_max', '<f8'), ('y_min', '<f8'),\
+                            ('y_max', '<f8'), ('y_min', '<f8'),('t_abs_max', '<f8'), ('t_abs_min', '<f8'),\
                             ('unix', '<i8'), ('matched', '<i4'), ('light_index', '<i4')])
     
     if np.size(labels_clusters) > 0:

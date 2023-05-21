@@ -5,8 +5,8 @@ from consts import *
 
 def calibrations(packets, mc_assn, detector):
     # unique id for each pixel, not to be confused with larnd-sim's pixel id
-    unique_ids = ((((packets['io_group'].astype(int)) * 256
-        + packets['io_channel'].astype(int)) * 256
+    unique_ids = ((((packets['io_group'].astype(int)) * 256 \
+        + packets['io_channel'].astype(int)) * 256 \
         + packets['chip_id'].astype(int)) * 64 \
         + packets['channel_id'].astype(int)).astype(str)
     v_ped, v_cm, v_ref, gain = pedestal_and_config(unique_ids, mc_assn, detector)
@@ -29,6 +29,9 @@ def PACMAN_drift(packets, detector, mc_assn):
         correction1 = [-9.597, 4.0021e-6]
         correction2 = [-9.329, 1.1770e-6]
     elif detector == 'module-1':
+        correction1 = [0.,0.]
+        correction2 = [0., 0.]
+    elif detector == 'module-2':
         correction1 = [0.,0.]
         correction2 = [0., 0.]
     elif detector == 'module-3':
@@ -85,6 +88,9 @@ def pedestal_and_config(unique_ids, mc_assn, detector):
     elif detector == 'module-1' and use_ped_config_files:
         pedestal_file = 'pedestal/module-1/packet_2022_02_08_01_40_31_CETevd_ped.json'
         config_file = 'config/module-1/config_22-02-08_13-37-39.json'
+    elif detector == 'module-2' and use_ped_config_files:
+        pedestal_file = 'pedestal/module-2/ped-evd-2022_11_18_04_35_CET.json'
+        config_file = 'config/module-2/config-evd-2022_11_18_04_35_CET.json'
     elif detector == 'module-3' and use_ped_config_files:
         pedestal_file = 'pedestal/module-3/pedestal-diagnostic-packet-2023_01_28_22_33_CETevd_ped.json'
         config_file = 'config/module-3/evd_config_23-01-29_11-12-16.json'
