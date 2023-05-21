@@ -4,7 +4,6 @@ Command-line interface to LArNDLE
 """
 from build_events import *
 from preclustering import *
-import charge_event_cuts
 import matching
 from light import *
 import h5py
@@ -94,6 +93,7 @@ def run_reconstruction(input_config_filename):
     nchannels_adc2 = module.nchannels_adc2
     matching_tolerance_unix = module.matching_tolerance_unix
     matching_tolerance_PPS = module.matching_tolerance_PPS
+    disabled_channels_list = module.disabled_channels_list
     
     input_packets_filepath = input_packets_filename
     output_events_filepath = output_events_filename
@@ -145,6 +145,24 @@ def run_reconstruction(input_config_filename):
     if nSec_end == -1 and mc_assn is None:
         print('nSec_end was set to -1, so processing entire file.')
     
+    if use_disabled_channels_list:
+        print('Using disabled channels list: ', disabled_channels_list)
+        disabled_channels = np.load(disabled_channels_list)
+        keys = disabled_channels['keys']
+
+        unique_ids_packets = ((((packets['io_group'].astype(int)) * 256 \
+            + packets['io_channel'].astype(int)) * 256 \
+            + packets['chip_id'].astype(int)) * 64 \
+            + packets['channel_id'].astype(int)).astype(int)
+        
+        nonType0_mask = packets['packet_type'] != 0
+        unique_ids_packets[nonType0_mask] = -1 # just to make sure we don't remove non data packets
+
+        print('Removing noisy packets...')
+        packets_to_keep_mask = np.isin(unique_ids_packets, keys, invert=True)
+        packets = packets[packets_to_keep_mask]
+        print('Finished. Removed ', 100 - np.sum(packets['packet_type'] == 0)/np.sum(np.invert(nonType0_mask)) * 100, ' % of data packets.')
+    
     # run reconstruction
     if mc_assn is None:
         hits_clusters_start_cindex = 0
@@ -187,8 +205,8 @@ def run_reconstruction(input_config_filename):
     if do_match_of_charge_to_light and mc_assn is None:
         # loop through the light files and only select triggers within the second ranges specified
         # note that not all these light events will have a match within the packets data selection
-        input_light_filepath_1 = adc_folder + detector + '/' + input_light_filename_1
-        input_light_filepath_2 = adc_folder + detector + '/' +  input_light_filename_2
+        input_light_filepath_1 = adc_folder + input_light_filename_1
+        input_light_filepath_2 = adc_folder + input_light_filename_2
         adc_sn_1 = input_light_filename_1.split('_')[0]
         adc_sn_2 = input_light_filename_2.split('_')[0]
         print('Using light file ', input_light_filepath_1)
