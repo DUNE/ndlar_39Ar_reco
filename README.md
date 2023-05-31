@@ -2,20 +2,20 @@ This repository contains code for reconstructing small energy deposits from radi
 
 Charge-light matching between LRS triggers and clusters is supported for data (can be toggled on or off in `consts.py`). This requires one `.data` file per ADC in the detector (e.g. one module has 2 ADCs). The data associated with matched LRS triggers is saved to the output file. Associations between clusters, hits, and LRS triggers are maintained in the datasets. The light dataset includes unix and PPS timestamps, and all waveforms and channels associated with each trigger. The corresponding clusters dataset contains a `matched` parameter which is 0 if the charge event was not matched to a light event and 1 if it was. The `light_index` parameter contains the index of the matched light event within the corresponding light events dataset. Note that light events not matched to a cluster are not saved in this file, but all clusters are saved to the output file regardless of whether they were matched to light.
 
-To clone LArNDLE, run:
+To clone the code, run:
 ```bash
-git clone https://github.com/sam-fogarty/LArNDLE.git
-cd LArNDLE
+git clone https://github.com/sam-fogarty/rad_decay_finder_ndlar.git
+cd rad_decay_finder_ndlar
 pip install .
 ```
 
 Here is an example of running the reconstruction in command-line, once cd'd into the `reco` directory:
 
 ```python
-python3 reco.py moduleX.py
+python3 reco.py detector.py
 ```
 
-`moduleX.py` is an input config file stored in the `input_config` directory. These files contain input variables for `reco.py`. This allows for easily running different configurations, especially when running a different detector (i.e., module-0,1,2,3 and 2x2). This code should mostly be agnostic to the different detectors at this point, but may need slight adjustments to work properly.
+`detector.py` is an input config file stored in the `input_config` directory. These files contain input variables for `reco.py`. This allows for easily running different configurations, especially when running a different detector (e.g. module-0,1,2,3 and 2x2). This code should mostly be agnostic to the different detectors at this point, but may need slight adjustments to work properly.
 
 The numbers of seconds of data to process is set in the input config file. Each second of data (between PPS pulses) is processed individually and the results are concatenated together. When processing data, there are various progress bars to give you an idea of how long it will take to process the file. Note that for simulation no such progress bars are currently supported.
 
