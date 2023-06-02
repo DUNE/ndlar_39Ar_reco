@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 
-VER = "0.0.0"
+VER = "0.1.0-alpha"
 
 reqs = ["numpy","adc64format", "tqdm", "sklearn", "collections", "json", "time", "fire", "matplotlib", "pickle", "scipy", "h5py","os", "importlib"]
 
 import setuptools
 
 setuptools.setup(
-    name="LArNDLE",
+    name="rad_decay_finder_ndlar",
     version=VER,
     author="Sam Fogarty",
     author_email="samuel.fogarty@colostate.edu",
     description="Reconstruction software for low-energy events in ND-LAr prototypes",
-    url="https://github.com/sam-fogarty/LArNDLE",
+    url="https://github.com/sam-fogarty/rad_decay_finder_ndlar",
     packages=setuptools.find_packages(),
     scripts=["reco/reco.py"],
     install_requires=reqs,
