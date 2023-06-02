@@ -19,18 +19,8 @@ gain_data = 1/221 # mV/e-
 eps = 20 ## mm
 min_samples = 1
 
-# Toggles for cuts and calibrations
-timestamp_cut = True
-PACMAN_clock_correction = True
-use_charge_event_drift_window_cut = False
-use_pixel_plane_cut = False
-use_ped_config_files = True
-use_disabled_channels_list = True
-
 # light
-adc_folder = '/sdf/group/neutrino/sfogarty/ND_prototype_files/light_data/module-0/light_study/'
 batch_size = 50 # how many events to load on each iteration
-do_match_of_charge_to_light = True
 
 # matching
 v_drift = 0.16 # cm/usec, 500V/cm
