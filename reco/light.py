@@ -4,27 +4,23 @@ from adc64format import dtypes, ADC64Reader
 from tqdm import tqdm
 from consts import *
 
-def ADC_drift(timestamps, adc, detector):
+def ADC_drift(timestamps, adc, module):
     ## correct for the clock drift in the different ADCs
     # input: tai_ns
-    if detector == 'module-0':
-        slope_0 = -1.18e-7 # sn 175780172 (#314C)
-        slope_1 = 1.18e-7 # sn 175854781 (#54BD)
-    elif detector == 'module-3':
-        slope_0 = 0
-        slope_1 = 0
-    clock_correction_factor = 0.625
+    ADC_drift_slope_0 = module.ADC_drift_slope_0
+    ADC_drift_slope_1 = module.ADC_drift_slope_1
+    clock_correction_factor = module.clock_correction_factor
     
     if adc == 0:
-        slope = slope_0
+        slope = ADC_drift_slope_0
     elif adc == 1:
-        slope = slope_1
+        slope = ADC_drift_slope_1
     elif adc > 1 or adc < 0:
         raise ValueError('adc must be either 0 or 1.')
         
     return timestamps.astype('f8')/(1.0 + slope) * clock_correction_factor
     
-def into_array(events_file_0, events_file_1, batch_size, event_dtype, detector,adc_sn_1, adc_sn_2):
+def into_array(events_file_0, events_file_1, batch_size, event_dtype, module, adc_sn_1, adc_sn_2):
     events = np.zeros((0,), dtype=event_dtype)
     # loop through events in batch
     for i in range(batch_size):
@@ -34,9 +30,9 @@ def into_array(events_file_0, events_file_1, batch_size, event_dtype, detector,a
             if event_time_0['tai_s'] == event_time_1['tai_s']:
                 # get relevant info about event from each ADC
                 event_tai_s = event_time_0[0]['tai_s']
-                if detector == 'module-0':
-                    event_tai_ns = (0.5*(ADC_drift(event_time_0[0]['tai_ns'] + event_time_0[0]['tai_s']*1e9, 0, detector) + \
-                    ADC_drift(event_time_1[0]['tai_ns'] + event_time_1[0]['tai_s']*1e9, 1, detector))).astype('i8')
+                if module.detector == 'module-0':
+                    event_tai_ns = (0.5*(ADC_drift(event_time_0[0]['tai_ns'] + event_time_0[0]['tai_s']*1e9, 0, module) + \
+                    ADC_drift(event_time_1[0]['tai_ns'] + event_time_1[0]['tai_s']*1e9, 1, module))).astype('i8')
                 else:
                     event_tai_ns = (0.5*(event_time_0[0]['tai_ns'] + event_time_1[0]['tai_ns'])).astype('i8')
                     
@@ -62,12 +58,20 @@ def into_array(events_file_0, events_file_1, batch_size, event_dtype, detector,a
     return events
 
 # go through relevant seconds in .data files for LRS
-def read_light_files(adc_file_1, adc_file_2, nSec_start, nSec_end, detector, adc_steps, nchannels_adc1, nchannels_adc2, adc_sn_1,adc_sn_2):
+def read_light_files(module):
+    
+    input_light_filename_1 = module.adc_folder + module.input_light_filename_1
+    input_light_filename_2 = module.adc_folder + module.input_light_filename_2
+    nSec_start = module.nSec_start_light
+    nSec_end = module.nSec_end_light
+    adc_sn_1 = (module.input_light_filename_1).split('_')[0]
+    adc_sn_2 = (module.input_light_filename_2).split('_')[0]
+    
     go = True
-    event_dtype = np.dtype([('tai_s', '<i4'), ('tai_ns', '<i8'), ('unix', '<i8'), ('channel_'+adc_sn_1, 'u1' , (nchannels_adc1,)),('channel_'+adc_sn_2, 'u1' , (nchannels_adc2,)), ('voltage_'+adc_sn_1,'<i2',(nchannels_adc1,adc_steps)), ('voltage_'+adc_sn_2,'<i2',(nchannels_adc2,adc_steps)), ('light_unique_id', '<i4')])
+    event_dtype = np.dtype([('tai_s', '<i4'), ('tai_ns', '<i8'), ('unix', '<i8'), ('channel_'+adc_sn_1, 'u1' , (module.nchannels_adc1,)),('channel_'+adc_sn_2, 'u1' , (module.nchannels_adc2,)), ('voltage_'+adc_sn_1,'<i2',(module.nchannels_adc1, module.light_time_steps)), ('voltage_'+adc_sn_2,'<i2',(module.nchannels_adc2,module.light_time_steps)), ('light_unique_id', '<i4')])
     light_events_all = np.zeros((0,),dtype=event_dtype)
     # read through the LRS files to get the light triggers
-    with ADC64Reader(adc_file_1, adc_file_2) as reader:
+    with ADC64Reader(input_light_filename_1, input_light_filename_2) as reader:
         current_sec = 0
         pbar = tqdm(total=nSec_end-nSec_start, desc=' Seconds processed in the light data:')
         while go == True:
@@ -75,7 +79,7 @@ def read_light_files(adc_file_1, adc_file_2, nSec_start, nSec_end, detector, adc
             # get matched events between multiple files
             events_file_0, events_file_1 = events
             # convert to numpy arrays for easier access
-            light_events = into_array(events_file_0, events_file_1, batch_size, event_dtype, detector, \
+            light_events = into_array(events_file_0, events_file_1, batch_size, event_dtype, module, \
                                      adc_sn_1, adc_sn_2)
             # combine each batch together
             if current_sec >= nSec_start and current_sec <= nSec_end:
@@ -83,7 +87,7 @@ def read_light_files(adc_file_1, adc_file_2, nSec_start, nSec_end, detector, adc
             
             set_of_tai_s = np.unique(light_events['tai_s'])
             
-            if detector == 'module-0':
+            if module.detector == 'module-0':
                 if len(set_of_tai_s) > 1 and np.max(set_of_tai_s) == 1:
                     if current_sec >= nSec_start and current_sec <= nSec_end:
                         pbar.update(1)

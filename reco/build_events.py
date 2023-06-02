@@ -6,7 +6,6 @@ from consts import *
 from calibrate import *
 from preclustering import *
 import matplotlib.pyplot as plt
-import scipy.stats
 import h5py
 
 def cluster_packets(eps,min_samples,txyz):
@@ -19,14 +18,15 @@ def cluster_packets(eps,min_samples,txyz):
 def getEventIDs(txyz, mc_assn, tracks, event_ids):
     for i in range(len(txyz)):
         index = int(mc_assn[i][0][0])
+        tracks_index = tracks[index]
         try:
-            event_id = tracks[index]['eventID']
+            event_id = tracks_index['eventID']
         except:
-            event_id = tracks[index]['spillID']
+            event_id = tracks_index['spillID']
         event_ids[i] = event_id
 
 def build_charge_events_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix,io_group,unique_ids,event_dtype,\
-                                      hits_size, hits_dtype,second,mc_assn,tracks):
+                                      hits_size, hits_dtype, second, mc_assn, tracks):
     ### Make hits and clusters datasets from DBSCAN clusters and corresponding hits
     # Inputs: 
     #   labels: list of labels from DBSCAN
@@ -122,7 +122,7 @@ def build_charge_events_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix
     results['light_index'] = np.ones(len(n_vals), dtype='i4')*-1
     return results, hits
 
-def analysis(packets,pixel_xy,mc_assn,tracks,detector,hits_clusters_max_cindex,sec):
+def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_clusters_max_cindex,sec):
     ## do charge reconstruction
     packet_type = packets['packet_type']
     pkt_7_mask = packet_type == 7
@@ -130,7 +130,7 @@ def analysis(packets,pixel_xy,mc_assn,tracks,detector,hits_clusters_max_cindex,s
     pkt_0_mask = packet_type == 0
     
     # grab the PPS timestamps of pkt type 7s and correct for PACMAN clock drift
-    PPS_pt7 = PACMAN_drift(packets, detector,mc_assn)[pkt_7_mask].astype('i8')*1e-1*1e3 # ns
+    PPS_pt7 = PACMAN_drift(packets, module)[pkt_7_mask].astype('i8')*1e-1*1e3 # ns
     
     # assign a unix timestamp to each packet based on the timestamp of the previous packet type 4
     timestamps = packets['timestamp'].astype('i8')
@@ -142,14 +142,14 @@ def analysis(packets,pixel_xy,mc_assn,tracks,detector,hits_clusters_max_cindex,s
     unix = unix_timestamps[pkt_0_mask].astype('i8')
     
     # apply a few PPS timestamp corrections, and select only data packets for analysis
-    ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix, detector)
+    ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix, module)
     dataword = packets['dataword']
     io_group = packets['io_group']
     
     # zip up y, z, and t values for clustering
     txyz = zip_pixel_tyz(packets,ts, pixel_xy)
     
-    v_ped, v_cm, v_ref, gain, unique_ids = calibrations(packets, mc_assn, detector)
+    v_ped, v_cm, v_ref, gain, unique_ids = calibrations(packets, mc_assn, module)
     # cluster packets to find track-like charge events
     db = cluster_packets(eps, min_samples, txyz)
     

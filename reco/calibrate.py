@@ -3,13 +3,13 @@ import json
 from collections import defaultdict
 from consts import *
 
-def calibrations(packets, mc_assn, detector):
+def calibrations(packets, mc_assn, module):
     # unique id for each pixel, not to be confused with larnd-sim's pixel id
     unique_ids = ((((packets['io_group'].astype(int)) * 256 \
         + packets['io_channel'].astype(int)) * 256 \
         + packets['chip_id'].astype(int)) * 64 \
         + packets['channel_id'].astype(int)).astype(str)
-    v_ped, v_cm, v_ref, gain = pedestal_and_config(unique_ids, mc_assn, detector)
+    v_ped, v_cm, v_ref, gain = pedestal_and_config(unique_ids, mc_assn, module)
     return v_ped, v_cm, v_ref, gain, unique_ids
 
 def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
@@ -22,32 +22,17 @@ def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
     charge = (adcs.astype('float64')/float(ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)/gain * 1e-3
     return charge
 
-def PACMAN_drift(packets, detector, mc_assn):
+def PACMAN_drift(packets, module):
     # only supports module-0
     ts = packets['timestamp'].astype('i8')
-    if detector == 'module-0':
-        correction1 = [-9.597, 4.0021e-6]
-        correction2 = [-9.329, 1.1770e-6]
-    elif detector == 'module-1':
-        correction1 = [0.,0.]
-        correction2 = [0., 0.]
-    elif detector == 'module-2':
-        correction1 = [0.,0.]
-        correction2 = [0., 0.]
-    elif detector == 'module-3':
-        # assuming correction[0] is 0, certainly isn't exactly true
-        correction1 = [0., 3.267e-6]
-        correction2 = [0., -8.9467e-7]
-    if mc_assn is not None:
-        correction1 = [0.,0.]
-        correction2 = [0., 0.]
+    
     mask_io1 = packets['io_group'] == 1
     mask_io2 = packets['io_group'] == 2
-    ts[mask_io1] = (packets[mask_io1]['timestamp'].astype('i8') - correction1[0]) / (1. + correction1[1])
-    ts[mask_io2] = (packets[mask_io2]['timestamp'].astype('i8') - correction2[0]) / (1. + correction2[1])
+    ts[mask_io1] = (packets[mask_io1]['timestamp'].astype('i8') - module.PACMAN_clock_correction1[0]) / (1. + module.PACMAN_clock_correction1[1])
+    ts[mask_io2] = (packets[mask_io2]['timestamp'].astype('i8') - module.PACMAN_clock_correction2[0]) / (1. + module.PACMAN_clock_correction2[1])
     return ts
     
-def timestamp_corrector(packets, mc_assn, unix, detector):
+def timestamp_corrector(packets, mc_assn, unix, module):
     # Corrects larpix clock timestamps due to slightly different PACMAN clock frequencies 
     # (from module0_flow timestamp_corrector.py)
     ts = packets['timestamp'].astype('i8')
@@ -57,7 +42,7 @@ def timestamp_corrector(packets, mc_assn, unix, detector):
 
     if mc_assn is not None:
         mc_assn = mc_assn[packet_type_0]
-    if mc_assn is None and timestamp_cut:
+    if mc_assn is None and module.timestamp_cut:
         # cut needed due to noisy packets too close to PPS pulse
         # (unless this problem has been fixed in the hardware)
         timestamps = packets['timestamp']
@@ -65,12 +50,12 @@ def timestamp_corrector(packets, mc_assn, unix, detector):
         ts = ts[timestamp_data_cut]
         packets = packets[timestamp_data_cut]
         unix = unix[timestamp_data_cut]
-    if mc_assn is None and PACMAN_clock_correction:
-        ts = PACMAN_drift(packets, detector, mc_assn).astype('i8')
+    if mc_assn is None and module.PACMAN_clock_correction:
+        ts = PACMAN_drift(packets, module).astype('i8')
     
     return ts, packets, mc_assn, unix
 
-def pedestal_and_config(unique_ids, mc_assn, detector):
+def pedestal_and_config(unique_ids, mc_assn, module):
     # function to open the pedestal and configuration files to get the dictionaries
     #   for the values of v_ped, v_cm, and v_ref for individual pixels. 
     #   Values are fixed in simulation but vary in data depending on pixel.
@@ -82,18 +67,6 @@ def pedestal_and_config(unique_ids, mc_assn, detector):
     #       note: mc_truth information for simulation (None for data)
     # Returns:
     #   v_ped, v_cm, v_ref, gain arrays; size of packets dataset
-    if detector == 'module-0' and use_ped_config_files:
-        pedestal_file = 'pedestal/module-0/datalog_2021_04_02_19_00_46_CESTevd_ped.json'
-        config_file = 'config/module-0/evd_config_21-03-31_12-36-13.json'
-    elif detector == 'module-1' and use_ped_config_files:
-        pedestal_file = 'pedestal/module-1/packet_2022_02_08_01_40_31_CETevd_ped.json'
-        config_file = 'config/module-1/config_22-02-08_13-37-39.json'
-    elif detector == 'module-2' and use_ped_config_files:
-        pedestal_file = 'pedestal/module-2/ped-evd-2022_11_18_04_35_CET.json'
-        config_file = 'config/module-2/config-evd-2022_11_18_04_35_CET.json'
-    elif detector == 'module-3' and use_ped_config_files:
-        pedestal_file = 'pedestal/module-3/pedestal-diagnostic-packet-2023_01_28_22_33_CETevd_ped.json'
-        config_file = 'config/module-3/evd_config_23-01-29_11-12-16.json'
 
     config_dict = defaultdict(lambda: dict(
         vref_mv=1300,
@@ -102,7 +75,9 @@ def pedestal_and_config(unique_ids, mc_assn, detector):
     pedestal_dict = defaultdict(lambda: dict(
         pedestal_mv=580
     ))
-    if use_ped_config_files:
+    if module.use_ped_config_files:
+        pedestal_file = module.pedestal_file
+        config_file = module.config_file
         # reading the data from the file
         with open(pedestal_file,'r') as infile:
             for key, value in json.load(infile).items():

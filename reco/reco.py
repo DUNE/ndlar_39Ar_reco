@@ -15,7 +15,7 @@ from adc64format import dtypes, ADC64Reader
 import importlib.util
 
 def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
-              mc_assn, tracks, pixel_xy, detector, hits_clusters_start_cindex):
+              mc_assn, tracks, pixel_xy, module, hits_clusters_start_cindex):
     ## loop through seconds of data and do charge reconstruction
     for sec in tqdm(range(nSec_start,int(nSec_end)+1),desc=" Seconds Processed: "):
         # Grab 1s at a time to analyze, plus the next 1s.
@@ -42,7 +42,7 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
         if sec == nSec_start:
             results_clusters, unix_pt7, PPS_pt7,\
                 hits_clusters = analysis(packets_1sec, pixel_xy,\
-                mc_assn, tracks, detector, hits_clusters_start_cindex,sec)
+                mc_assn, tracks, module, hits_clusters_start_cindex,sec)
         elif sec > nSec_start:
             # making sure to continously increment cluster_index as we go onto the next PPS
             if np.size(hits_clusters['cluster_index']) > 0:
@@ -52,7 +52,7 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
             # run reconstruction and save temporary arrays of results
             results_clusters_temp, unix_pt7_temp, PPS_pt7_temp,\
                 hits_clusters_temp\
-                = analysis(packets_1sec, pixel_xy, mc_assn, tracks, detector,\
+                = analysis(packets_1sec, pixel_xy, mc_assn, tracks, module,\
                                         hits_clusters_max_cindex,sec)
             # concatenate temp arrays to main arrays
             results_clusters = np.concatenate((results_clusters, results_clusters_temp))
@@ -62,9 +62,9 @@ def reco_loop(nSec_start, nSec_end, PPS_indices, packets,\
     hits_clusters_max_cindex = np.max(hits_clusters['cluster_index'])+1
     return results_clusters,unix_pt7,PPS_pt7, hits_clusters, hits_clusters_max_cindex
 
-def reco_MC(packets, mc_assn, tracks, pixel_xy, detector):
+def reco_MC(packets, mc_assn, tracks, pixel_xy, module):
     results_clusters, unix_pt7, PPS_pt7,\
-        hits_clusters = analysis(packets, pixel_xy, mc_assn, tracks, detector, 0, 0)
+        hits_clusters = analysis(packets, pixel_xy, mc_assn, tracks, module, 0, 0)
     return results_clusters, unix_pt7,PPS_pt7, hits_clusters
 
 def run_reconstruction(input_config_filename):
@@ -79,55 +79,55 @@ def run_reconstruction(input_config_filename):
     
     # set variables from config file
     detector = module.detector
-    input_packets_filename = module.input_packets_filename
-    input_light_filename_1 = module.input_light_filename_1
-    input_light_filename_2 = module.input_light_filename_2
-    output_events_filename = module.output_events_filename
-    nSec_start = module.nSec_start_packets
-    nSec_end = module.nSec_end_packets
-    nSec_start_light = module.nSec_start_light
-    nSec_end_light = module.nSec_end_light
-    sync_filename = module.sync_filename
-    light_time_steps = module.light_time_steps
-    nchannels_adc1 = module.nchannels_adc1
-    nchannels_adc2 = module.nchannels_adc2
-    matching_tolerance_unix = module.matching_tolerance_unix
-    matching_tolerance_PPS = module.matching_tolerance_PPS
-    disabled_channels_list = module.disabled_channels_list
+    data_type = module.data_type
     
-    input_packets_filepath = input_packets_filename
-    output_events_filepath = output_events_filename
-    
-    if detector not in ['module-0','module-1','module-2', 'module-3','2x2']:
-        raise Exception("Possible values of 'detector' are only 'module-0', 'module-1','module-2', 'module-3', and '2x2' (without quotes).")
-    if os.path.exists(output_events_filepath):
-        raise Exception('Output file '+ str(output_events_filepath) + ' already exists.')
-    if nSec_start <= 0 or nSec_start - int(nSec_start) or nSec_end < -1 or nSec_end - int(nSec_end) > 0:
-        raise ValueError('nSec_start and nSec_end must be greater than zero and be an integer.')
-    if input_packets_filename.split('.')[-1] != 'h5':
+    if data_type == 'data':
+        nSec_start = module.nSec_start_packets
+        nSec_end = module.nSec_end_packets
+        nSec_start_light = module.nSec_start_light
+        nSec_end_light = module.nSec_end_light
+    elif data_type == 'MC':
+        pass
+    else:
+        raise ValueError(f'Data type {data_type} not supported. Choose data or MC.')
+        
+    # do various file / parameter checks
+    if os.path.exists(module.output_events_filename):
+        raise Exception('Output file '+ str(module.output_events_filename) + ' already exists.')
+    if not os.path.exists(module.detector_dict_path):
+        raise Exception(f'Dictionary file {module.detector_dict_path} does not exist.')
+    else:
+        print('Using pixel layout dictionary: ', module.detector_dict_path)
+    if not os.path.exists(module.input_packets_filename):
+        raise Exception(f'Packets file {module.input_packets_filename} does not exist.')
+    else:
+        print('Opening packets file: ', module.input_packets_filename)
+    if module.input_packets_filename.split('.')[-1] != 'h5':
         raise Exception('Input file must be an h5 file.')
-    
-    # load dictionary for calculating hit position on pixel plane. Made using larpix-readout-parser.
-    if detector == 'module-0':
-        dict_path = 'layout/module-0/multi_tile_layout-2.3.16.pkl'
-    elif detector == 'module-1':
-        dict_path = 'layout/module-1/module1_layout-2.3.16.pkl'
-    elif detector == 'module-2':
-        dict_path = 'layout/module-2/multi_tile_layout-2022_11_18_04_35_CET.pkl'
-    elif detector == 'module-3':
-        dict_path = 'layout/module-3/multi_tile_layout-module3.pkl'
-    elif detector == '2x2':
-        dict_path = 'layout/2x2/multi_tile_layout-2.3.16_2x2.pkl'
-    pixel_xy = load_geom_dict(dict_path)
-    print('Using pixel layout dictionary: ', dict_path)
+    if data_type == 'data':
+        if nSec_start <= 0 or nSec_start - int(nSec_start) or nSec_end < -1 or nSec_end - int(nSec_end) > 0:
+            raise ValueError('nSec_start and nSec_end must be greater than zero and be an integer.')
+        if module.use_disabled_channels_list:
+            if not os.path.exists(module.disabled_channels_list):
+                raise Exception(f'Disabled channels file {module.disabled_channels_list} does not exist.')
+            elif os.path.exists(module.disabled_channels_list) and module.use_disabled_channels_list:
+                print('Using disabled channels list: ', module.disabled_channels_list)
+        else:
+            pass
+    if module.do_match_of_charge_to_light and data_type == 'data':
+        if not os.path.exists(module.adc_folder + module.input_light_filename_1):
+            raise Exception(f'Input light file {module.adc_folder + module.input_light_filename_1} does not exist.')
+        if not os.path.exists(module.adc_folder + module.input_light_filename_2):
+            raise Exception(f'Input light file {module.adc_folder + module.input_light_filename_2} does not exist.')
+    # detector dict file must be pkl file made with larpix_readout_parser
+    pixel_xy = load_geom_dict(module.detector_dict_path)
     
     # open packets file
-    print('Opening packets file: ', input_packets_filepath)
-    f_packets = h5py.File(input_packets_filepath)
+    f_packets = h5py.File(module.input_packets_filename)
     try:
         f_packets['packets']
     except: 
-        raise KeyError('Packets not found in ' + input_packets_filepath)
+        raise KeyError('Packets not found in ' + module.input_packets_filename)
     
     analysis_start = time.time()
     
@@ -138,35 +138,34 @@ def run_reconstruction(input_config_filename):
         mc_assn = f_packets['mc_packets_assn']
         tracks = f_packets['tracks']
     except:
-        mc_assn=None
         print("No 'mc_packets_assn' dataset found, processing as real data.")
     
     # get packets and indices of PPS pulses
     packets = f_packets['packets']
     
-    if nSec_end == -1 and mc_assn is None:
-        print('nSec_end was set to -1, so processing entire file.')
-    
-    if use_disabled_channels_list:
-        print('Using disabled channels list: ', disabled_channels_list)
-        disabled_channels = np.load(disabled_channels_list)
-        keys = disabled_channels['keys']
-
-        unique_ids_packets = ((((packets['io_group'].astype(int)) * 256 \
-            + packets['io_channel'].astype(int)) * 256 \
-            + packets['chip_id'].astype(int)) * 64 \
-            + packets['channel_id'].astype(int)).astype(int)
+    if data_type == 'data':
+        if nSec_end == -1:
+            print('nSec_end was set to -1, so processing entire file.')
         
-        nonType0_mask = packets['packet_type'] != 0
-        unique_ids_packets[nonType0_mask] = -1 # just to make sure we don't remove non data packets
+        if module.use_disabled_channels_list:
+            disabled_channels = np.load(disabled_channels_list)
+            keys = disabled_channels['keys']
 
-        print('Removing noisy packets...')
-        packets_to_keep_mask = np.isin(unique_ids_packets, keys, invert=True)
-        packets = packets[packets_to_keep_mask]
-        print('Finished. Removed ', 100 - np.sum(packets['packet_type'] == 0)/np.sum(np.invert(nonType0_mask)) * 100, ' % of data packets.')
+            unique_ids_packets = ((((packets['io_group'].astype(int)) * 256 \
+                + packets['io_channel'].astype(int)) * 256 \
+                + packets['chip_id'].astype(int)) * 64 \
+                + packets['channel_id'].astype(int)).astype(int)
+
+            nonType0_mask = packets['packet_type'] != 0
+            unique_ids_packets[nonType0_mask] = -1 # just to make sure we don't remove non data packets
+
+            print('Removing noisy packets...')
+            packets_to_keep_mask = np.isin(unique_ids_packets, keys, invert=True)
+            packets = packets[packets_to_keep_mask]
+            print('Finished. Removed ', 100 - np.sum(packets['packet_type'] == 0)/np.sum(np.invert(nonType0_mask)) * 100, ' % of data packets.')
     
     # run reconstruction
-    if mc_assn is None:
+    if mc_assn is None or data_type == 'data':
         hits_clusters_start_cindex = 0
         io_groups = np.unique(packets['io_group'])
         for io in tqdm(io_groups, desc = 'Processing io_groups: '):
@@ -185,13 +184,13 @@ def run_reconstruction(input_config_filename):
                 results_clusters, unix_pt7, \
                 PPS_pt7, hits_clusters,\
                 hits_clusters_start_cindex = \
-                reco_loop(nSec_start, nSec_end, PPS_indices, packets_io, mc_assn, tracks, pixel_xy, detector,\
+                reco_loop(nSec_start, nSec_end, PPS_indices, packets_io, mc_assn, tracks, pixel_xy, module,\
                     hits_clusters_start_cindex)
             else:
                 results_clusters_temp, unix_pt7_temp, \
                     PPS_pt7_temp, hits_clusters_temp,\
                     hits_clusters_start_cindex = \
-                    reco_loop(nSec_start, nSec_end, PPS_indices, packets_io, mc_assn, tracks, pixel_xy, detector,\
+                    reco_loop(nSec_start, nSec_end, PPS_indices, packets_io, mc_assn, tracks, pixel_xy, module,\
                         hits_clusters_start_cindex)
                 results_clusters = np.concatenate((results_clusters, results_clusters_temp))
                 unix_pt7 = np.concatenate((unix_pt7, unix_pt7_temp))
@@ -199,28 +198,21 @@ def run_reconstruction(input_config_filename):
                 hits_clusters = np.concatenate((hits_clusters, hits_clusters_temp))
     else:
         results_clusters, unix_pt7, PPS_pt7, hits_clusters = \
-            reco_MC(packets, mc_assn, tracks, pixel_xy, detector)
+            reco_MC(packets, mc_assn, tracks, pixel_xy, module)
     # do cuts on charge events. See toggles for cuts in consts.py.
     # if all toggles are False then this command simply returns `results` unchanged.
     #results_small_clusters = charge_event_cuts.all_charge_event_cuts(results_small_clusters)
     
-    if do_match_of_charge_to_light and mc_assn is None:
+    if module.do_match_of_charge_to_light and mc_assn is None:
         # loop through the light files and only select triggers within the second ranges specified
         # note that not all these light events will have a match within the packets data selection
-        input_light_filepath_1 = adc_folder + input_light_filename_1
-        input_light_filepath_2 = adc_folder + input_light_filename_2
-        adc_sn_1 = input_light_filename_1.split('_')[0]
-        adc_sn_2 = input_light_filename_2.split('_')[0]
-        print('Using light file ', input_light_filepath_1)
-        print('Using light file ', input_light_filepath_2)
         print('Loading light files with a batch size of ', batch_size, ' ...')
-        light_events_all = read_light_files(input_light_filepath_1, input_light_filepath_2, nSec_start_light, nSec_end_light, detector, light_time_steps, nchannels_adc1, nchannels_adc2,adc_sn_1, adc_sn_2)
+        light_events_all = read_light_files(module)
     
         # match light events to ext triggers in packets (packet type 7)
         light_events_all = light_events_all[light_events_all['unix'] != 0]
         print('Matching light triggers to external triggers in packets...')
-        indices_in_ext_triggers = matching.match_light_to_ext_trigger(light_events_all, PPS_pt7, unix_pt7, \
-            matching_tolerance_unix, matching_tolerance_PPS) # length of light_events_all
+        indices_in_ext_triggers = matching.match_light_to_ext_trigger(light_events_all, PPS_pt7, unix_pt7, module) # length of light_events_all
         evt_mask = indices_in_ext_triggers != -1
         indices_in_ext_triggers = indices_in_ext_triggers[evt_mask]
         light_events_all = light_events_all[evt_mask]
@@ -229,14 +221,14 @@ def run_reconstruction(input_config_filename):
         
         # match ext triggers / light events to charge events for the large clusters
         print('Performing charge-light matching for the charge clusters...')
-        results_clusters, results_clusters_light_events = matching.match_light_to_charge(light_events_all, results_clusters, PPS_pt7_light, unix_pt7_light)
+        results_clusters, results_clusters_light_events = matching.match_light_to_charge(light_events_all, results_clusters, PPS_pt7_light, unix_pt7_light, module)
     else:
         print('Skipping getting light events and doing charge-light matching...')
     
-    print('Saving events to ', output_events_filepath)
-    with h5py.File(output_events_filepath, 'w') as f:
+    print('Saving clusters and light data to ', module.output_events_filename)
+    with h5py.File(module.output_events_filename, 'w') as f:
         dset_hits_clusters = f.create_dataset('clusters_hits', data=hits_clusters, dtype=hits_clusters.dtype)
-        if do_match_of_charge_to_light:
+        if module.do_match_of_charge_to_light:
             dset_light_events = f.create_dataset('clusters_matched_light', data=results_clusters_light_events, dtype=results_clusters_light_events.dtype)
         dset_clusters = f.create_dataset('clusters', data=results_clusters, dtype=results_clusters.dtype)
     
