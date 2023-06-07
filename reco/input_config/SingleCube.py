@@ -1,31 +1,31 @@
-### module-0 input configuration
+### SingleCube input configuration
 
 # detector name
-detector = 'module-0'
+detector = 'SingleCube'
 data_type = 'data'
 
 # required filepaths
-input_packets_filename = '/Users/samuelfogarty/Desktop/mod0files.nosync/datalog_2021_04_06_00_50_23_CEST.h5'
-output_events_filename = input_packets_filename.split('.h5')[0] + '_events_module0.h5'
-detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.pkl'
-detprop_path = 'detector_properties/module0.yaml'
+input_packets_filename = '/Users/samuelfogarty/Documents/SingleCube/datalog_2023_01_20_04_29_36_MST.h5'
+output_events_filename = input_packets_filename.split('.h5')[0] + '_events_SingleCube.h5'
+detector_dict_path = 'layout/single_tile_layout-2.0.1.pkl'
+detprop_path = 'detector_properties/SingleCube.yaml'
 
 # optional filepaths, set to None to bypass. Can alternatively just toggle them on/off below.
 adc_folder = '/Users/samuelfogarty/Desktop/mod0files.nosync/'
 input_light_filename_1 = '0a7a314c_20210406_005022.data'
 input_light_filename_2 = '0a7b54bd_20210406_005022.data'
 disabled_channels_list = None
-pedestal_file = 'pedestal/module0_datalog_2021_04_02_19_00_46_CESTevd_ped.json'
-config_file = 'config/module0_evd_config_21-03-31_12-36-13.json'
+pedestal_file = 'pedestal/CSUSingleCube_tile-id-3-pedestal_2022_12_19_14_31_54_MST_evd_ped.json'
+config_file = 'config/CSUSingleCube_config_23-06-05_13-59-25.json'
 
 # toggles
-do_match_of_charge_to_light = True
+do_match_of_charge_to_light = False
 use_disabled_channels_list = False
 use_ped_config_files = True
 
 # data selection
 nSec_start_packets = 1
-nSec_end_packets = 300
+nSec_end_packets = -1
 nSec_start_light = nSec_start_packets
 nSec_end_light = nSec_end_packets
 

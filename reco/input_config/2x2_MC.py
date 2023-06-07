@@ -1,14 +1,14 @@
-### module-0 MC input configuration
+### 2x2 MC input configuration
 
 # detector name
-detector = 'module-0'
+detector = '2x2'
 data_type = 'MC'
 
 # required filepaths
-input_packets_filename = '/Users/samuelfogarty/Desktop/mod0files.nosync/mod0_MC/larndsim.6ke-m0.5ke.143.h5'
+input_packets_filename = '/Users/samuelfogarty/Desktop/mod0files.nosync/2x2_MC/MiniRun3_1E19_RHC.larnd_v2.00000.LARNDSIM.h5'
 output_events_filename = input_packets_filename.split('.h5')[0] + '_events.h5'
-detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.pkl'
-detprop_path = 'detector_properties/module0.yaml'
+detector_dict_path = 'layout/2x2_multi_tile_layout-2.3.16.pkl'
+detprop_path = 'detector_properties/2x2.yaml'
 
 # toggles
 do_match_of_charge_to_light = False
