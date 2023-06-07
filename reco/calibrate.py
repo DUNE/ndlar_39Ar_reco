@@ -25,7 +25,7 @@ def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
 def PACMAN_drift(packets, module):
     # only supports module-0
     ts = packets['timestamp'].astype('i8')
-    
+    print('ts: ', ts)
     mask_io1 = packets['io_group'] == 1
     mask_io2 = packets['io_group'] == 2
     ts[mask_io1] = (packets[mask_io1]['timestamp'].astype('i8') - module.PACMAN_clock_correction1[0]) / (1. + module.PACMAN_clock_correction1[1])
@@ -39,7 +39,6 @@ def timestamp_corrector(packets, mc_assn, unix, module):
     packet_type_0 = packets['packet_type'] == 0
     ts = ts[packet_type_0]
     packets = packets[packet_type_0]
-
     if mc_assn is not None:
         mc_assn = mc_assn[packet_type_0]
     if mc_assn is None and module.timestamp_cut:

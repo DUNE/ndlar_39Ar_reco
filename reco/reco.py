@@ -148,7 +148,7 @@ def run_reconstruction(input_config_filename):
             print('nSec_end was set to -1, so processing entire file.')
         
         if module.use_disabled_channels_list:
-            disabled_channels = np.load(disabled_channels_list)
+            disabled_channels = np.load(module.disabled_channels_list)
             keys = disabled_channels['keys']
 
             unique_ids_packets = ((((packets['io_group'].astype(int)) * 256 \
@@ -170,7 +170,8 @@ def run_reconstruction(input_config_filename):
         io_groups = np.unique(packets['io_group'])
         for io in tqdm(io_groups, desc = 'Processing io_groups: '):
             packets_io = packets[packets['io_group'] == io]
-            PPS_indices = np.where((packets_io['packet_type'] == 6) & (packets_io['trigger_type'] == 83))[0]
+            PPS_indices = np.where((packets_io['packet_type'] == 6))[0]
+            #PPS_indices = np.where((packets_io['packet_type'] == 6) & (packets_io['trigger_type'] == 83))[0]
             if nSec_end == -1:
                 nSec_end = len(PPS_indices)-1
                 nSec_end_light = nSec_end
@@ -179,6 +180,7 @@ def run_reconstruction(input_config_filename):
                 nSec_end_light = nSec_end
                 print('Note: nSec_end is set greater than the total seconds in file, ', nSec_end, ', so processing entire file.')
             if nSec_start > len(PPS_indices)-1:
+                print('len(PPS_indices)-1:',len(PPS_indices)-1)
                 raise ValueError('nSec_start is greater than possible values of seconds. Set nSec_start to be smaller.')
             if io == io_groups[0]:
                 results_clusters, unix_pt7, \

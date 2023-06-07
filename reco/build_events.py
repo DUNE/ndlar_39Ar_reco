@@ -147,7 +147,7 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_clusters_max_cindex,sec
     io_group = packets['io_group']
     
     # zip up y, z, and t values for clustering
-    txyz = zip_pixel_tyz(packets,ts, pixel_xy)
+    txyz = zip_pixel_tyz(packets,ts, pixel_xy, module)
     
     v_ped, v_cm, v_ref, gain, unique_ids = calibrations(packets, mc_assn, module)
     # cluster packets to find track-like charge events
