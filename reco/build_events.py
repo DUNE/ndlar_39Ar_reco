@@ -130,6 +130,7 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_clusters_max_cindex,sec
     pkt_0_mask = packet_type == 0
     
     # grab the PPS timestamps of pkt type 7s and correct for PACMAN clock drift
+    io_group_pt7 = packets['io_group'][pkt_7_mask]
     PPS_pt7 = PACMAN_drift(packets, module)[pkt_7_mask].astype('i8')*1e-1*1e3 # ns
     
     # assign a unix timestamp to each packet based on the timestamp of the previous packet type 4
@@ -195,4 +196,4 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_clusters_max_cindex,sec
         results_clusters = np.zeros((0,), dtype=event_clusters_dtype)
         hits_clusters = np.zeros((0,), dtype=hits_dtype)
 
-    return results_clusters, unix_pt7, PPS_pt7, hits_clusters
+    return results_clusters, unix_pt7, PPS_pt7, io_group_pt7, hits_clusters

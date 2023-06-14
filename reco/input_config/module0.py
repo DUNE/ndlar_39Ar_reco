@@ -30,8 +30,7 @@ nSec_start_light = nSec_start_packets
 nSec_end_light = nSec_end_packets
 
 # charge
-PACMAN_clock_correction1 = [-9.597, 4.0021e-6]
-PACMAN_clock_correction2 = [-9.329, 1.1770e-6]
+PACMAN_clock_correction = [[-9.597, 4.0021e-6],[-9.329, 1.1770e-6]]
 PACMAN_clock_correction = True
 timestamp_cut = True
 

@@ -23,13 +23,10 @@ def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
     return charge
 
 def PACMAN_drift(packets, module):
-    # only supports module-0
     ts = packets['timestamp'].astype('i8')
-    print('ts: ', ts)
-    mask_io1 = packets['io_group'] == 1
-    mask_io2 = packets['io_group'] == 2
-    ts[mask_io1] = (packets[mask_io1]['timestamp'].astype('i8') - module.PACMAN_clock_correction1[0]) / (1. + module.PACMAN_clock_correction1[1])
-    ts[mask_io2] = (packets[mask_io2]['timestamp'].astype('i8') - module.PACMAN_clock_correction2[0]) / (1. + module.PACMAN_clock_correction2[1])
+    for io in range(1, len(np.unique(packets['io_group']))):
+        io_mask = packets['io_group'] == io
+        ts[io_mask] = (packets[io_mask]['timestamp'].astype('i8') - module.PACMAN_clock_correction[io-1][0]) / (1. + module.PACMAN_clock_correction[io-1][1])
     return ts
     
 def timestamp_corrector(packets, mc_assn, unix, module):
@@ -41,7 +38,7 @@ def timestamp_corrector(packets, mc_assn, unix, module):
     packets = packets[packet_type_0]
     if mc_assn is not None:
         mc_assn = mc_assn[packet_type_0]
-    if mc_assn is None and module.timestamp_cut:
+    if mc_assn is None and module.use_timestamp_cut:
         # cut needed due to noisy packets too close to PPS pulse
         # (unless this problem has been fixed in the hardware)
         timestamps = packets['timestamp']
@@ -49,7 +46,7 @@ def timestamp_corrector(packets, mc_assn, unix, module):
         ts = ts[timestamp_data_cut]
         packets = packets[timestamp_data_cut]
         unix = unix[timestamp_data_cut]
-    if mc_assn is None and module.PACMAN_clock_correction:
+    if mc_assn is None and module.use_PACMAN_clock_correction:
         ts = PACMAN_drift(packets, module).astype('i8')
     
     return ts, packets, mc_assn, unix

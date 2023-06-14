@@ -24,8 +24,7 @@ ADC_drift_slope_0 = 0. # sn 175780172 (#314C)
 ADC_drift_slope_1 = 0. # sn 175854781 (#54BD)
 
 # charge
-PACMAN_clock_correction1 = [0., 0.]
-PACMAN_clock_correction2 = [0., 0.]
+PACMAN_clock_correction = [[0., 0.],[0.,0.]]
 
 # matching
 ext_trig_matching_tolerance_unix = 1

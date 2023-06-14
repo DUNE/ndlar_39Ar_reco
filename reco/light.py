@@ -59,7 +59,7 @@ def into_array(events_file_0, events_file_1, batch_size, event_dtype, module, ad
 
 # go through relevant seconds in .data files for LRS
 def read_light_files(module):
-    
+    #print('Loading light files with a batch size of ', module.batch_size, ' ...')
     input_light_filename_1 = module.adc_folder + module.input_light_filename_1
     input_light_filename_2 = module.adc_folder + module.input_light_filename_2
     nSec_start = module.nSec_start_light
@@ -68,7 +68,7 @@ def read_light_files(module):
     adc_sn_2 = (module.input_light_filename_2).split('_')[0]
     
     go = True
-    event_dtype = np.dtype([('tai_s', '<i4'), ('tai_ns', '<i8'), ('unix', '<i8'), ('channel_'+adc_sn_1, 'u1' , (module.nchannels_adc1,)),('channel_'+adc_sn_2, 'u1' , (module.nchannels_adc2,)), ('voltage_'+adc_sn_1,'<i2',(module.nchannels_adc1, module.light_time_steps)), ('voltage_'+adc_sn_2,'<i2',(module.nchannels_adc2,module.light_time_steps)), ('light_unique_id', '<i4')])
+    event_dtype = np.dtype([('tai_s', '<i4'), ('tai_ns', '<i8'), ('unix', '<i8'), ('channel_'+adc_sn_1, 'u1' , (module.nchannels_adc1,)),('channel_'+adc_sn_2, 'u1' , (module.nchannels_adc2,)), ('voltage_'+adc_sn_1,'<i2',(module.nchannels_adc1, module.light_time_steps)), ('voltage_'+adc_sn_2,'<i2',(module.nchannels_adc2,module.light_time_steps))])
     light_events_all = np.zeros((0,),dtype=event_dtype)
     # read through the LRS files to get the light triggers
     with ADC64Reader(input_light_filename_1, input_light_filename_2) as reader:
