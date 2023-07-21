@@ -67,20 +67,31 @@ def reco_MC(packets, mc_assn, tracks, pixel_xy, module):
         hits_clusters = analysis(packets, pixel_xy, mc_assn, tracks, module, 0, 0)
     return results_clusters, unix_pt7,PPS_pt7, hits_clusters
 
-def run_reconstruction(input_config_filename):
+def run_reconstruction(input_config_filename, input_filepath=None, output_filepath=None):
     ## main function
     
-    # import input variables. Get variables with module.<variable>
+    # Import input variables file. Get variables with module.<variable>
     input_config_filepath = 'input_config/' + input_config_filename
     module_name = "detector_module"
     spec = importlib.util.spec_from_file_location(module_name, input_config_filepath)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     
-    # set variables from config file
+    # set some variables from config file
     detector = module.detector
     data_type = module.data_type
     
+    if input_filepath is not None:
+        input_packets_filename = input_filepath
+    else:
+        input_packets_filename = module.input_packets_filename
+
+    if output_filepath is not None:
+        output_events_filename = output_filepath
+    else:
+        output_events_filename = module.output_events_filename
+
+    # define seconds over which to process data
     if data_type == 'data':
         nSec_start = module.nSec_start_packets
         nSec_end = module.nSec_end_packets
@@ -92,17 +103,17 @@ def run_reconstruction(input_config_filename):
         raise ValueError(f'Data type {data_type} not supported. Choose data or MC.')
         
     # do various file / parameter checks
-    if os.path.exists(module.output_events_filename):
-        raise Exception('Output file '+ str(module.output_events_filename) + ' already exists.')
+    if os.path.exists(output_events_filename):
+        raise Exception('Output file '+ str(output_events_filename) + ' already exists.')
     if not os.path.exists(module.detector_dict_path):
         raise Exception(f'Dictionary file {module.detector_dict_path} does not exist.')
     else:
         print('Using pixel layout dictionary: ', module.detector_dict_path)
-    if not os.path.exists(module.input_packets_filename):
-        raise Exception(f'Packets file {module.input_packets_filename} does not exist.')
+    if not os.path.exists(input_packets_filename):
+        raise Exception(f'Packets file {input_packets_filename} does not exist.')
     else:
-        print('Opening packets file: ', module.input_packets_filename)
-    if module.input_packets_filename.split('.')[-1] != 'h5':
+        print('Opening packets file: ', input_packets_filename)
+    if input_packets_filename.split('.')[-1] != 'h5':
         raise Exception('Input file must be an h5 file.')
     if data_type == 'data':
         if nSec_start <= 0 or nSec_start - int(nSec_start) or nSec_end < -1 or nSec_end - int(nSec_end) > 0:
@@ -119,34 +130,32 @@ def run_reconstruction(input_config_filename):
             raise Exception(f'Input light file {module.adc_folder + module.input_light_filename_1} does not exist.')
         if not os.path.exists(module.adc_folder + module.input_light_filename_2):
             raise Exception(f'Input light file {module.adc_folder + module.input_light_filename_2} does not exist.')
-    # detector dict file must be pkl file made with larpix_readout_parser
+    
+    # detector dictionary file must be pkl file made with larpix_readout_parser
     pixel_xy = load_geom_dict(module.detector_dict_path)
     
     # open packets file
-    f_packets = h5py.File(module.input_packets_filename)
+    f = h5py.File(input_packets_filename)
     try:
-        f_packets['packets']
+        # get packets
+        packets = f['packets']
     except: 
-        raise KeyError('Packets not found in ' + module.input_packets_filename)
-    
-    analysis_start = time.time()
+        raise KeyError('Packets not found in ' + input_packets_filename)
     
     # open mc_assn dataset for MC
-    mc_assn=None
-    tracks=None
+    mc_assn, tracks = None, None
     try:
-        mc_assn = f_packets['mc_packets_assn']
-        tracks = f_packets['tracks']
+        mc_assn = f['mc_packets_assn']
+        tracks = f['tracks']
     except:
         print("No 'mc_packets_assn' dataset found, processing as real data.")
     
-    # get packets and indices of PPS pulses
-    packets = f_packets['packets']
-    
+    analysis_start = time.time()
     if data_type == 'data':
         if nSec_end == -1:
             print('nSec_end was set to -1, so processing entire file.')
         
+        # load disabled channels npz file (for e.g. excluding noisy channels)
         if module.use_disabled_channels_list:
             disabled_channels = np.load(module.disabled_channels_list)
             keys = disabled_channels['keys']
@@ -227,8 +236,8 @@ def run_reconstruction(input_config_filename):
     else:
         print('Skipping getting light events and doing charge-light matching...')
     
-    print('Saving clusters and light data to ', module.output_events_filename)
-    with h5py.File(module.output_events_filename, 'w') as f:
+    print('Saving clusters and light data to ', output_events_filename)
+    with h5py.File(output_events_filename, 'w') as f:
         dset_hits_clusters = f.create_dataset('clusters_hits', data=hits_clusters, dtype=hits_clusters.dtype)
         if module.do_match_of_charge_to_light:
             dset_light_events = f.create_dataset('clusters_matched_light', data=results_clusters_light_events, dtype=results_clusters_light_events.dtype)
