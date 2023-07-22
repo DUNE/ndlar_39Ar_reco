@@ -5,9 +5,9 @@ detector = 'module-0'
 data_type = 'MC'
 
 # required filepaths
-input_packets_filename = '/Users/samuelfogarty/Desktop/mod0files.nosync/mod0_MC/larndsim.6ke-m0.5ke.143.h5'
-output_events_filename = input_packets_filename.split('.h5')[0] + '_events.h5'
-detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.pkl'
+input_packets_filename = '/sdf/group/neutrino/sfogarty/ND_prototype_files/MC/module-0/radiologicals_afterNESTfix/larnd-sim/larndsim_238U_gammas_10k_2.h5'
+output_events_filename = '/sdf/group/neutrino/sfogarty/ND_prototype_files/MC/module-0/radiologicals_afterNESTfix/reco/larndsim_238U_gammas_10k_2_clusters.h5'
+detector_dict_path = 'layout/module0_multi_tile_layout-2.4.16.pkl'
 detprop_path = 'detector_properties/module0.yaml'
 
 # toggles
