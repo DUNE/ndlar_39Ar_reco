@@ -146,7 +146,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
     mc_assn, tracks = None, None
     try:
         mc_assn = f['mc_packets_assn']
-        tracks = f['tracks']
+        tracks = f['segments']
     except:
         print("No 'mc_packets_assn' dataset found, processing as real data.")
     
