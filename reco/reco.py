@@ -113,10 +113,12 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
 
     for i in tqdm(range(nBatches), desc = 'Processing batches...'):
         packets_batch = packets[index_start:index_end]
+        print(f'Length of packets_batch = {len(packets_batch)}')
         if mc_assn is not None:
             mc_assn = mc_assn[index:index_end]
         clusters, unix_pt7, PPS_pt7, hits = \
             analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex)
+        print(f'len(clusters) = {len(clusters)}, len(hits) = {len(hits)}, len(unix_pt7) = {len(unix_pt7)}, len(PPS_pt7) = {len(PPS_pt7)}')
         # making sure to continously increment cluster_index as we go onto the next batch
         if np.size(hits['cluster_index']) > 0:
             hits_max_cindex = np.max(hits['cluster_index'])+1
@@ -138,6 +140,10 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
                 f['ext_trig_unix'][-unix_pt7.shape[0]:] = unix_pt7
                 f['ext_trig_PPS'].resize((f['ext_trig_PPS'].shape[0] + PPS_pt7.shape[0]), axis=0)
                 f['ext_trig_PPS'][-PPS_pt7.shape[0]:] = PPS_pt7
+                
+                print(f"len(f['clusters']) = {len(f['clusters'])}")
+        index_start += batch_size
+        index_end += batch_size
     
     if module.do_match_of_charge_to_light and mc_assn is None:
         # loop through the light files and only select triggers within the second ranges specified
