@@ -5,8 +5,8 @@ detector = 'module-0'
 data_type = 'data'
 
 # required filepaths
-input_packets_filename = '/Users/samuelfogarty/Desktop/mod0files.nosync/datalog_2021_04_06_00_50_23_CEST.h5'
-output_events_filename = input_packets_filename.split('.h5')[0] + '_events_module0.h5'
+input_packets_filename = '/sdf/group/neutrino/sfogarty/ND_prototype_files/charge_data/module-0/radiologicals_study/data/datalog_2021_04_04_20_59_11_CEST.h5'
+output_events_filename = input_packets_filename.split('.h5')[0] + '_events_test.h5'
 detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.pkl'
 detprop_path = 'detector_properties/module0.yaml'
 
@@ -19,19 +19,13 @@ pedestal_file = 'pedestal/module0_datalog_2021_04_02_19_00_46_CESTevd_ped.json'
 config_file = 'config/module0_evd_config_21-03-31_12-36-13.json'
 
 # toggles
-do_match_of_charge_to_light = True
+do_match_of_charge_to_light = False
 use_disabled_channels_list = False
 use_ped_config_files = True
 
-# data selection
-nSec_start_packets = 1
-nSec_end_packets = 300
-nSec_start_light = nSec_start_packets
-nSec_end_light = nSec_end_packets
-
 # charge
-PACMAN_clock_correction1 = [-9.597, 4.0021e-6]
-PACMAN_clock_correction2 = [-9.329, 1.1770e-6]
+PACMAN_clock_correction1 = [-9.597, 3.7453e-06]
+PACMAN_clock_correction2 = [-9.329, 9.0283e-07]
 PACMAN_clock_correction = True
 timestamp_cut = True
 

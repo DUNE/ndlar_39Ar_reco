@@ -5,8 +5,8 @@ detector = 'module-1'
 data_type = 'data'
 
 # required filepaths
-input_packets_filename = '/Users/samuelfogarty/Desktop/mod0files.nosync/datalog_2021_04_06_00_50_23_CEST.h5'
-output_events_filename = input_packets_filename.split('.h5')[0] + '_events.h5'
+input_packets_filename = '/sdf/group/neutrino/sfogarty/ND_prototype_files/charge_data/module-1/light_study/packet_2022_02_08_01_47_59_CET.h5'
+output_events_filename = input_packets_filename.split('.h5')[0] + '_clusters_test_test.h5'
 detector_dict_path = 'layout/module1_layout-2.3.16.pkl'
 detprop_path = 'detector_properties/module0.yaml'
 
@@ -23,15 +23,9 @@ do_match_of_charge_to_light = False
 use_disabled_channels_list = False
 use_ped_config_files = True
 
-# data selection
-nSec_start_packets = 1
-nSec_end_packets = 400
-nSec_start_light = nSec_start_packets
-nSec_end_light = nSec_end_packets
-
 # charge
-PACMAN_clock_correction1 = [0., 0.]
-PACMAN_clock_correction2 = [0., 0.]
+PACMAN_clock_correction1 = [0., -2.5825e-07]
+PACMAN_clock_correction2 = [0., 4.0650e-07]
 PACMAN_clock_correction = True
 timestamp_cut = True
 
