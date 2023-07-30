@@ -105,13 +105,14 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         print('Finished. Removed ', 100 - np.sum(packets['packet_type'] == 0)/np.sum(np.invert(nonType0_mask)) * 100, ' % of data packets.')
     
     nBatches = 200
+    batches_limit = 5
     # run reconstruction
     hits_max_cindex = 0
     batch_size = math.ceil(len(packets)/nBatches)
     index_start = 0
     index_end = batch_size
 
-    for i in tqdm(range(nBatches), desc = 'Processing batches...'):
+    for i in tqdm(range(batches_limit), desc = 'Processing batches...'):
         packets_batch = packets[index_start:index_end]
         print(f'Length of packets_batch = {len(packets_batch)}')
         if mc_assn is not None:

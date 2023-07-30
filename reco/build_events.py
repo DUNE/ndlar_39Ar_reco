@@ -25,20 +25,20 @@ def getEventIDs(txyz, mc_assn, tracks, event_ids):
             event_id = tracks_index['spillID']
         event_ids[i] = event_id
 
-def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix,io_group,unique_ids, \
+def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,unique_ids, \
                                       hits_size, mc_assn, tracks):
     ### Make hits and clusters datasets from DBSCAN clusters and corresponding hits
     # Inputs: 
     #   labels: list of labels from DBSCAN
     #   dataword: packet ADC counts
     #   unique_ids: unique id for each pixel corresponding to the packets
-    #   v_ref, v_cm, v_ped, gain: arrays providing pixel parameters for ADC->ke- conversion
+    #   v_ref, v_cm, v_ped: arrays providing pixel parameters for ADC->ke- conversion
     #   ...
     # Outputs:
     #   clusters: array of cluster data
     #   hits: array of hit-level data
 
-    charge = adcs_to_ke(dataword, v_ref, v_cm, v_ped, gain)
+    charge = adcs_to_ke(dataword, v_ref, v_cm, v_ped)
     q_vals = np.bincount(labels, weights=charge)
     
     # get event IDs if MC
@@ -125,7 +125,7 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex):
     
     # zip up x, y, z, and t values for clustering
     txyz = zip_pixel_tyz(packets, ts, pixel_xy, module)
-    v_ped, v_cm, v_ref, gain, unique_ids = calibrations(packets, mc_assn, module)
+    v_ped, v_cm, v_ref, unique_ids = calibrations(packets, mc_assn, module)
     db = cluster_packets(eps, min_samples, txyz)
     
     labels = np.array(db.labels_)
@@ -134,7 +134,7 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex):
         clusters, hits = \
             find_charge_clusters(labels,dataword,txyz,\
             v_ref=v_ref,v_cm=v_cm,v_ped=v_ped,\
-            gain=gain, unix=unix, io_group=io_group,\
+            unix=unix, io_group=io_group,\
             unique_ids=unique_ids,\
             hits_size=hits_max_cindex,\
             mc_assn=mc_assn, tracks=tracks)

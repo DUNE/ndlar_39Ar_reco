@@ -9,17 +9,17 @@ def calibrations(packets, mc_assn, module):
         + packets['io_channel'].astype(int)) * 256 \
         + packets['chip_id'].astype(int)) * 64 \
         + packets['channel_id'].astype(int)).astype(str)
-    v_ped, v_cm, v_ref, gain = pedestal_and_config(unique_ids, mc_assn, module)
-    return v_ped, v_cm, v_ref, gain, unique_ids
+    v_ped, v_cm, v_ref = pedestal_and_config(unique_ids, mc_assn, module)
+    return v_ped, v_cm, v_ref, unique_ids
 
-def adcs_to_ke(adcs, v_ref, v_cm, v_ped, gain):
+def adcs_to_ke(adcs, v_ref, v_cm, v_ped):
     ### converts adc counts to charge in ke-
     # Inputs:
     #   adcs: array of packet ADC counts
     #   v_ref, v_cm, v_ped, gain: array of pixel calibration parameters
     # Outputs:
     #   array of charge in ke- 
-    charge = (adcs.astype('float64')/float(ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)/gain * 1e-3
+    charge = (adcs.astype('float64')/float(ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)
     return charge
 
 def PACMAN_drift(packets, module):
@@ -85,20 +85,18 @@ def pedestal_and_config(unique_ids, mc_assn, module):
             for key, value in json.load(infile).items():
                 config_dict[key] = value
   
-    v_ped,v_cm,v_ref,gain = np.zeros_like(unique_ids,dtype='float64'),np.zeros_like(unique_ids,dtype='float64'),np.zeros_like(unique_ids,dtype='float64'),np.ones_like(unique_ids,dtype='float64')
+    v_ped,v_cm,v_ref = np.zeros_like(unique_ids,dtype='float64'),np.zeros_like(unique_ids,dtype='float64'),np.zeros_like(unique_ids,dtype='float64')
 
     # make arrays with values for v_ped,v_cm,v_ref, and gain for ADC to ke- conversion 
     # FIXME: Can we make this without the for loop?
-    for i,id in enumerate(unique_ids):
+    for i,ID in enumerate(unique_ids):
         if mc_assn is None:
-            v_ped[i] = pedestal_dict[id]['pedestal_mv']
-            v_cm[i] = config_dict[id]['vcm_mv']
-            v_ref[i] = config_dict[id]['vref_mv']
-            gain[i] = gain_data
+            v_ped[i] = pedestal_dict[ID]['pedestal_mv']
+            v_cm[i] = config_dict[ID]['vcm_mv']
+            v_ref[i] = config_dict[ID]['vref_mv']
         else:
             v_ped[i] = v_pedestal_sim
             v_cm[i] = v_cm_sim
             v_ref[i] = v_ref_sim
-            gain[i] = gain_sim
     
-    return v_ped, v_cm, v_ref, gain
+    return v_ped, v_cm, v_ref

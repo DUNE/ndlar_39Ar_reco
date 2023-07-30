@@ -13,10 +13,6 @@ v_ref_data = 1300.78125
 # Total number of ADC counts
 ADC_COUNTS = 2**8
 
-# gain values
-gain_sim = 1/221 # mV/e-, make sure to match simulation file
-gain_data = 1/221 # mV/e-
-
 # DBSCAN parameters
 eps = 20 ## mm
 min_samples = 1
