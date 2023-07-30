@@ -105,7 +105,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         print('Finished. Removed ', 100 - np.sum(packets['packet_type'] == 0)/np.sum(np.invert(nonType0_mask)) * 100, ' % of data packets.')
     
     nBatches = 200
-    batches_limit = 5
+    batches_limit = 10
     # run reconstruction
     hits_max_cindex = 0
     batch_size = math.ceil(len(packets)/nBatches)
@@ -114,12 +114,10 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
 
     for i in tqdm(range(batches_limit), desc = 'Processing batches...'):
         packets_batch = packets[index_start:index_end]
-        print(f'Length of packets_batch = {len(packets_batch)}')
         if mc_assn is not None:
             mc_assn = mc_assn[index:index_end]
-        clusters, unix_pt7, PPS_pt7, hits = \
+        clusters, ext_trig, hits = \
             analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex)
-        print(f'len(clusters) = {len(clusters)}, len(hits) = {len(hits)}, len(unix_pt7) = {len(unix_pt7)}, len(PPS_pt7) = {len(PPS_pt7)}')
         # making sure to continously increment cluster_index as we go onto the next batch
         if np.size(hits['cluster_index']) > 0:
             hits_max_cindex = np.max(hits['cluster_index'])+1
@@ -128,8 +126,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
             with h5py.File(output_events_filename, 'a') as output_file:
                 output_file.create_dataset('clusters', data=clusters, maxshape=(None,))
                 output_file.create_dataset('hits', data=hits, maxshape=(None,))
-                output_file.create_dataset('ext_trig_unix', data=unix_pt7, maxshape=(None,))
-                output_file.create_dataset('ext_trig_PPS', data=PPS_pt7, maxshape=(None,))
+                output_file.create_dataset('ext_trig', data=ext_trig, maxshape=(None,))
         else:
             # add new results to hdf5 file
             with h5py.File(output_events_filename, 'a') as f:
@@ -137,12 +134,9 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
                 f['clusters'][-clusters.shape[0]:] = clusters
                 f['hits'].resize((f['hits'].shape[0] + hits.shape[0]), axis=0)
                 f['hits'][-hits.shape[0]:] = hits
-                f['ext_trig_unix'].resize((f['ext_trig_unix'].shape[0] + unix_pt7.shape[0]), axis=0)
-                f['ext_trig_unix'][-unix_pt7.shape[0]:] = unix_pt7
-                f['ext_trig_PPS'].resize((f['ext_trig_PPS'].shape[0] + PPS_pt7.shape[0]), axis=0)
-                f['ext_trig_PPS'][-PPS_pt7.shape[0]:] = PPS_pt7
+                f['ext_trig'].resize((f['ext_trig'].shape[0] + ext_trig.shape[0]), axis=0)
+                f['ext_trig'][-ext_trig.shape[0]:] = ext_trig
                 
-                print(f"len(f['clusters']) = {len(f['clusters'])}")
         index_start += batch_size
         index_end += batch_size
     

@@ -33,6 +33,6 @@ clusters_dtype = np.dtype([('nhit', '<i4'), ('q', '<f8'),('io_group', '<i4'),\
                         ('y_max', '<f8'), ('y_min', '<f8'),\
                         ('unix', '<i8'), ('matched', '<i4'), ('light_index', '<i4')])
     
-
+ext_trig_dtype = np.dtype([('unix', '<i8'), ('ts_PPS', '<i8'), ('io_group', '<i4')])
 
 

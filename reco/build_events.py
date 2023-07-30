@@ -38,7 +38,7 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     #   clusters: array of cluster data
     #   hits: array of hit-level data
 
-    charge = adcs_to_ke(dataword, v_ref, v_cm, v_ped)
+    charge = adcs_to_mV(dataword, v_ref, v_cm, v_ped)
     q_vals = np.bincount(labels, weights=charge)
     
     # get event IDs if MC
@@ -109,7 +109,7 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex):
     
     # grab the PPS timestamps of pkt type 7s and correct for PACMAN clock drift
     PPS_pt7 = PACMAN_drift(packets, module)[pkt_7_mask].astype('i8')*1e-1*1e3 # ns
-    
+    io_group_pt7 = packets[pkt_7_mask]['io_group']
     # assign a unix timestamp to each packet based on the timestamp of the previous packet type 4
     unix_timestamps = np.copy(packets['timestamp']).astype('i8')
     unix_timestamps[np.invert(pkt_4_mask)] = 0
@@ -117,6 +117,11 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex):
     unix_timestamps = np.interp(np.arange(len(unix_timestamps)), nonzero_indices, unix_timestamps[nonzero_indices])
     unix_pt7 = np.copy(unix_timestamps)[pkt_7_mask].astype('i8')
     unix = np.copy(unix_timestamps)[pkt_0_mask].astype('i8')
+    
+    ext_trig = np.zeros((np.size(unix_pt7),), dtype=consts.ext_trig_dtype)
+    ext_trig['unix'] = unix_pt7
+    ext_trig['ts_PPS'] = PPS_pt7
+    ext_trig['io_group'] = io_group_pt7
     
     # apply a few PPS timestamp corrections, and select only data packets for analysis
     ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix, module)
@@ -139,4 +144,4 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex):
             hits_size=hits_max_cindex,\
             mc_assn=mc_assn, tracks=tracks)
 
-    return clusters, unix_pt7, PPS_pt7, hits
+    return clusters, ext_trig, hits

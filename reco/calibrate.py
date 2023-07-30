@@ -12,13 +12,13 @@ def calibrations(packets, mc_assn, module):
     v_ped, v_cm, v_ref = pedestal_and_config(unique_ids, mc_assn, module)
     return v_ped, v_cm, v_ref, unique_ids
 
-def adcs_to_ke(adcs, v_ref, v_cm, v_ped):
-    ### converts adc counts to charge in ke-
+def adcs_to_mV(adcs, v_ref, v_cm, v_ped):
+    ### converts adc counts to charge in mV
     # Inputs:
     #   adcs: array of packet ADC counts
     #   v_ref, v_cm, v_ped, gain: array of pixel calibration parameters
     # Outputs:
-    #   array of charge in ke- 
+    #   array of charge in mV
     charge = (adcs.astype('float64')/float(ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)
     return charge
 
