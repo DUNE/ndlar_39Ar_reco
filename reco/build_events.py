@@ -78,7 +78,7 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix,io_grou
     
     # save array of event information
     n_vals = np.bincount(labels)
-    io_group_vals = np.bincount(labels, weights=io_group)
+    io_group_vals = np.bincount(labels, weights=io_group)[n_vals != 0]
     unix_vals = np.bincount(labels, weights=unix)[n_vals != 0]
     q_vals = q_vals[n_vals != 0]
     n_vals = n_vals[n_vals != 0] # get rid of n_vals that are 0, otherwise get divide by 0 later
@@ -87,7 +87,7 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,gain,unix,io_grou
     clusters['nhit'] = n_vals
     clusters['q'] = q_vals
     clusters['unix'] = (unix_vals/n_vals).astype('i8') # all of these hits should have the same unix anyway
-    clusters['io_group'] = (io_group_vals[0]).astype('i4')
+    clusters['io_group'] = (io_group_vals/n_vals).astype('i4')
     clusters['t_min'] = min_timestamps/(v_drift*1e1) * 1e3
     clusters['t_max'] = max_timestamps/(v_drift*1e1) * 1e3
     clusters['x_min'] = np.array(list(map(np.min, label_x)), dtype='i8')
