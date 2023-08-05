@@ -17,21 +17,18 @@ ADC_COUNTS = 2**8
 eps = 20 ## mm
 min_samples = 1
 
-# light
-batch_size = 50 # how many events to load on each iteration
-
 # matching
 v_drift = 0.16 # cm/usec, 500V/cm
 drift_distance = 30.27 # cm
     
 hits_dtype = np.dtype([('q', '<f8'),('io_group', '<i4'),('unique_id', 'i4'),\
-                        ('t', '<i8'),('x', '<f8'), ('y', '<f8'), ('z', '<f8'),\
+                        ('t', '<i8'),('x', '<f8'), ('y', '<f8'), ('z_anode', '<f8'), ('z_drift', '<f8'), \
                         ('unix', '<i8'), ('cluster_index', '<i4'),('event_id', '<i4')])
 
 clusters_dtype = np.dtype([('nhit', '<i4'), ('q', '<f8'),('io_group', '<i4'),\
-                        ('t_max', '<i8'), ('t_min', '<i8'),('x_max', '<f8'), ('x_min', '<f8'),
-                        ('y_max', '<f8'), ('y_min', '<f8'),\
-                        ('unix', '<i8'), ('matched', '<i4'), ('light_index', '<i4')])
+                        ('t_max', '<i8'), ('t_mid', '<i8'), ('t_min', '<i8'),('t0', '<i8'),('x_max', '<f8'), ('x_mid', '<f8'), ('x_min', '<f8'), 
+                        ('y_max', '<f8'),('y_mid', '<f8'), ('y_min', '<f8'),('z_max', '<f8'),('z_mid', '<f8'), ('z_min', '<f8'),\
+                        ('unix', '<i8'), ('matched', '<i4'), ('ext_trig_index', '<i4'), ('light_index', '<i4')])
     
 ext_trig_dtype = np.dtype([('unix', '<i8'), ('ts_PPS', '<i8'), ('io_group', '<i4')])
 

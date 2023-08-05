@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Command-line interface to LArNDLE
+Command-line interface to the charge clustering and matching to external triggers
 """
 from build_events import *
 from preclustering import *
@@ -11,6 +11,7 @@ import os
 from tqdm import tqdm
 import importlib.util
 import math
+import consts
 
 def run_reconstruction(input_config_filename, input_filepath=None, output_filepath=None):
     ## main function
@@ -25,6 +26,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
     # set some variables from config file
     detector = module.detector
     data_type = module.data_type
+    match_charge_to_ext_trig = True
     
     if input_filepath is not None:
         input_packets_filename = input_filepath
@@ -95,23 +97,50 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         packets = packets[packets_to_keep_mask]
         print('Finished. Removed ', 100 - np.sum(packets['packet_type'] == 0)/np.sum(np.invert(nonType0_mask)) * 100, ' % of data packets.')
     
-    nBatches = 200
-    batches_limit = nBatches
+    nBatches = 400
+    batches_limit = 100
     # run reconstruction
     hits_max_cindex = 0
     batch_size = math.ceil(len(packets)/nBatches)
     index_start = 0
     index_end = batch_size
 
+    PPS_window = module.charge_light_matching_PPS_window
+    unix_window = module.charge_light_matching_unix_window
+    
     for i in tqdm(range(batches_limit), desc = 'Processing batches...'):
         packets_batch = packets[index_start:index_end]
         if mc_assn is not None:
             mc_assn = mc_assn[index:index_end]
+        
         clusters, ext_trig, hits = \
             analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex)
+        
+        # match clusters to external triggers
+        if match_charge_to_ext_trig:
+            for j, trig in enumerate(ext_trig):
+                # match clusters to ext triggers
+                matched_clusters_mask = (clusters['t_min'].astype('f8') > float(trig['ts_PPS']) - 0.25*PPS_window) & \
+                                        (clusters['t_max'].astype('f8') < float(trig['ts_PPS']) + 1.25*PPS_window) & \
+                                        (np.abs(trig['unix'].astype('f8') - clusters['unix'].astype('f8')) <= unix_window) & \
+                                        (clusters['io_group'] == trig['io_group'])
+                matched_clusters_indices = np.where(matched_clusters_mask)[0]
+                np.put(clusters['ext_trig_index'], matched_clusters_indices, j)
+                np.put(clusters['t0'], matched_clusters_indices, trig['ts_PPS'])
+                # loop through hits in clusters to calculate drift position
+                for cluster_index in matched_clusters_indices:
+                    hits_this_cluster_mask = hits['cluster_index'] == cluster_index + hits_max_cindex
+                    hits_this_cluster = np.copy(hits[hits_this_cluster_mask])
+                    driftFactor = np.zeros(len(hits_this_cluster))
+                    driftFactor[hits_this_cluster['z_anode'] <= 0] = 1
+                    driftFactor[hits_this_cluster['z_anode'] > 0] = -1
+                    z_drift = hits_this_cluster['z_anode'] + \
+                            driftFactor*np.abs((clusters[cluster_index]['t0'].astype('f8') - hits_this_cluster['t'].astype('f8'))*(10*consts.v_drift/1e3))
+                    np.put(hits['z_drift'], np.where(hits_this_cluster_mask)[0], z_drift)
+                    
         # making sure to continously increment cluster_index as we go onto the next batch
-        if np.size(hits['cluster_index']) > 0:
-            hits_max_cindex = np.max(hits['cluster_index'])+1
+        hits_max_cindex = np.max(hits['cluster_index'])+1
+        #print(f"hits_max_cindex = {hits_max_cindex}")
         if i == 0:
             # create the hdf5 datasets with initial results
             with h5py.File(output_events_filename, 'a') as output_file:
