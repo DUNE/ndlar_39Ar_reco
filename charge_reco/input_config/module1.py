@@ -7,6 +7,7 @@ data_type = 'data'
 # required filepaths
 input_packets_filename = '/sdf/group/neutrino/sfogarty/ND_prototype_files/charge_data/module-1/light_study/packet_2022_02_08_01_47_59_CET.h5'
 output_events_filename = input_packets_filename.split('.h5')[0] + '_clusters_test_test.h5'
+#detector_dict_path = 'layout/multi_tile_layout-2.4.16.pkl'
 detector_dict_path = 'layout/module1_layout-2.3.16.pkl'
 detprop_path = 'detector_properties/module0.yaml'
 
@@ -30,4 +31,4 @@ ext_trig_matching_tolerance_unix = 1
 ext_trig_matching_tolerance_PPS = 1.5e3 # ns
 from consts import drift_distance, v_drift
 charge_light_matching_PPS_window = int(drift_distance / v_drift * 1e3)
-charge_light_matching_unix_window = 1
+charge_light_matching_unix_window = 0
