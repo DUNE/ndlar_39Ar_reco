@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 
-VER = "0.1.0-alpha"
+VER = "0.2.1-alpha"
 
 reqs = ["numpy","adc64format", "tqdm", "sklearn", "collections", "json", "time", "fire", "matplotlib", "pickle", "scipy", "h5py","os", "importlib"]
 
 import setuptools
 
 setuptools.setup(
-    name="rad_decay_finder_ndlar",
+    name="ndlar_39Ar_reco",
     version=VER,
     author="Sam Fogarty",
     author_email="samuel.fogarty@colostate.edu",
-    description="Reconstruction software for low-energy events in ND-LAr prototypes",
-    url="https://github.com/sam-fogarty/rad_decay_finder_ndlar",
+    description="Reconstruction code for low-energy activity in ND-LAr prototypes",
+    url="https://github.com/sam-fogarty/ndlar_39Ar_reco",
     packages=setuptools.find_packages(),
-    scripts=["reco/reco.py"],
+    scripts=["charge_reco/charge_clustering.py"],
     install_requires=reqs,
     classifiers=[
         "Development Status :: 1 - Pre-Alpha",
