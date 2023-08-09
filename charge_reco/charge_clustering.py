@@ -76,7 +76,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         mc_assn = f['mc_packets_assn']
         tracks = f['segments']
     except:
-        print("No 'mc_packets_assn' dataset found, processing as real data.")
+        print("No 'mc_packets_assn' or 'segments' dataset found, processing as real data.")
     
     analysis_start = time.time()
     # load disabled channels npz file (for e.g. excluding noisy channels)
@@ -97,8 +97,8 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         packets = packets[packets_to_keep_mask]
         print('Finished. Removed ', 100 - np.sum(packets['packet_type'] == 0)/np.sum(np.invert(nonType0_mask)) * 100, ' % of data packets.')
     
-    nBatches = 400
-    batches_limit = 50
+    nBatches = module.nBatches
+    batches_limit = module.batches_limit
     # run reconstruction
     hits_max_cindex = 0
     ext_trig_max_index = 0
@@ -109,14 +109,12 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
     PPS_window = module.charge_light_matching_PPS_window
     unix_window = module.charge_light_matching_unix_window
     z_drift_factor = 10*consts.v_drift/1e3
-    #lower_PPS_window = int(0.10*PPS_window)
-    #upper_PPS_window = int(1.10*PPS_window)
     lower_PPS_window = PPS_window
     upper_PPS_window = PPS_window
     for i in tqdm(range(batches_limit), desc = 'Processing batches...'):
         packets_batch = np.array(packets[index_start:index_end])
         if mc_assn is not None:
-            mc_assn = np.array(mc_assn[index:index_end])
+            mc_assn = np.array(mc_assn[index_start:index_end])
         
         clusters, ext_trig, hits = \
             analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex)
