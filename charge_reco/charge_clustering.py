@@ -98,20 +98,25 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         print('Finished. Removed ', 100 - np.sum(packets['packet_type'] == 0)/np.sum(np.invert(nonType0_mask)) * 100, ' % of data packets.')
     
     nBatches = 400
-    batches_limit = 100
+    batches_limit = 50
     # run reconstruction
     hits_max_cindex = 0
+    ext_trig_max_index = 0
     batch_size = math.ceil(len(packets)/nBatches)
     index_start = 0
     index_end = batch_size
 
     PPS_window = module.charge_light_matching_PPS_window
     unix_window = module.charge_light_matching_unix_window
-    
+    z_drift_factor = 10*consts.v_drift/1e3
+    #lower_PPS_window = int(0.10*PPS_window)
+    #upper_PPS_window = int(1.10*PPS_window)
+    lower_PPS_window = PPS_window
+    upper_PPS_window = PPS_window
     for i in tqdm(range(batches_limit), desc = 'Processing batches...'):
-        packets_batch = packets[index_start:index_end]
+        packets_batch = np.array(packets[index_start:index_end])
         if mc_assn is not None:
-            mc_assn = mc_assn[index:index_end]
+            mc_assn = np.array(mc_assn[index:index_end])
         
         clusters, ext_trig, hits = \
             analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex)
@@ -120,26 +125,39 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         if match_charge_to_ext_trig:
             for j, trig in enumerate(ext_trig):
                 # match clusters to ext triggers
-                matched_clusters_mask = (clusters['t_min'].astype('f8') > float(trig['ts_PPS']) - 0.25*PPS_window) & \
-                                        (clusters['t_max'].astype('f8') < float(trig['ts_PPS']) + 1.25*PPS_window) & \
-                                        (np.abs(trig['unix'].astype('f8') - clusters['unix'].astype('f8')) <= unix_window) & \
+                matched_clusters_mask = (clusters['t_min'] > trig['ts_PPS'] - lower_PPS_window) & \
+                                        (clusters['t_max'] < trig['ts_PPS'] + upper_PPS_window) & \
+                                        (trig['unix'] == clusters['unix']) & \
                                         (clusters['io_group'] == trig['io_group'])
                 matched_clusters_indices = np.where(matched_clusters_mask)[0]
-                np.put(clusters['ext_trig_index'], matched_clusters_indices, j)
+                np.put(clusters['ext_trig_index'], matched_clusters_indices, j+ext_trig_max_index)
                 np.put(clusters['t0'], matched_clusters_indices, trig['ts_PPS'])
+                
+                #print(f"PPS_window={PPS_window}, \n trig io group={trig['io_group']}, trig PPS={trig['ts_PPS']}, trig unix={trig['unix'].astype('f8')}, j={j}")
+                #if len(matched_clusters_indices)>0:
+                #    print('min t_min clusters = ',np.min(clusters['t_min'][matched_clusters_mask]))
+                #    print('min t_max clusters = ',np.max(clusters['t_max'][matched_clusters_mask]))
+                #    print(f'total number of matches = {np.sum(matched_clusters_mask)}')
                 # loop through hits in clusters to calculate drift position
                 for cluster_index in matched_clusters_indices:
                     hits_this_cluster_mask = hits['cluster_index'] == cluster_index + hits_max_cindex
                     hits_this_cluster = np.copy(hits[hits_this_cluster_mask])
-                    driftFactor = np.zeros(len(hits_this_cluster))
-                    driftFactor[hits_this_cluster['z_anode'] <= 0] = 1
-                    driftFactor[hits_this_cluster['z_anode'] > 0] = -1
-                    z_drift = hits_this_cluster['z_anode'] + \
-                            driftFactor*np.abs((clusters[cluster_index]['t0'].astype('f8') - hits_this_cluster['t'].astype('f8'))*(10*consts.v_drift/1e3))
+                    #driftFactor = np.ones(len(hits_this_cluster))
+                    #driftFactor[hits_this_cluster['z_anode'] <= 0] = 1
+                    #driftFactor[hits_this_cluster['z_anode'] > 0] = -1
+                    z_drift_shift = hits_this_cluster['z_drift']*(hits_this_cluster['t'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
+                    z_drift = hits_this_cluster['z_anode'] + z_drift_shift
+                    #print(f"hits z anode = {hits_this_cluster['z_anode']}, \n {hits_this_cluster['z_drift']}, cluster t0 = {clusters[cluster_index]['t0']}, hits t={hits_this_cluster['t']}, z_drift_factor={z_drift_factor}, z_drift_shift={z_drift_shift}, z_drift={z_drift}")
+                    #print(' ')
                     np.put(hits['z_drift'], np.where(hits_this_cluster_mask)[0], z_drift)
+                    np.put(clusters['z_drift_mid'], cluster_index, np.mean(z_drift))
+                    np.put(clusters['z_drift_min'], cluster_index, np.min(z_drift))
+                    np.put(clusters['z_drift_max'], cluster_index, np.max(z_drift))
+                    
                     
         # making sure to continously increment cluster_index as we go onto the next batch
         hits_max_cindex = np.max(hits['cluster_index'])+1
+        ext_trig_max_index += len(ext_trig)
         #print(f"hits_max_cindex = {hits_max_cindex}")
         if i == 0:
             # create the hdf5 datasets with initial results

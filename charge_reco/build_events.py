@@ -19,10 +19,7 @@ def getEventIDs(txyz, mc_assn, tracks, event_ids):
     for i in range(len(txyz)):
         index = int(mc_assn[i][0][0])
         tracks_index = tracks[index]
-        try:
-            event_id = tracks_index['eventID']
-        except:
-            event_id = tracks_index['spillID']
+        event_id = tracks_index['event_id']
         event_ids[i] = event_id
 
 def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,unique_ids, \
@@ -37,7 +34,18 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     # Outputs:
     #   clusters: array of cluster data
     #   hits: array of hit-level data
-    labels = labels[labels != -1]
+    labels = labels
+    indices_sorted = np.argsort(labels)
+    labels = labels[indices_sorted]
+    txyz = txyz[indices_sorted]
+    v_ref = v_ref[indices_sorted]
+    v_cm = v_cm[indices_sorted]
+    v_ped = v_ped[indices_sorted]
+    unix = unix[indices_sorted]
+    io_group = io_group[indices_sorted]
+    unique_ids = unique_ids[indices_sorted]
+    dataword = dataword[indices_sorted]
+    
     charge = adcs_to_mV(dataword, v_ref, v_cm, v_ped)
     q_vals = np.bincount(labels, weights=charge)
     
@@ -57,7 +65,7 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     hits['x'] = txyz[:,1]
     hits['y'] = txyz[:,2]
     hits['z_anode'] = txyz[:,3]
-    hits['z_drift'] = np.ones(len(labels))*-1
+    hits['z_drift'] = txyz[:,4]
     hits['unique_id'] = unique_ids
     hits['unix'] = unix
     labels_global = np.copy(labels)
@@ -65,40 +73,36 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     hits['cluster_index'] = labels_global
     hits['event_id'] = event_ids
     
-    # add cluster data to clusters dataset
-    indices_sorted = np.argsort(labels)
-    labels = labels[indices_sorted]
-    timestamps = np.copy(txyz[:,0])[indices_sorted]
+    #timestamps = np.copy(txyz[:,0])[indices_sorted]
     
-    min_timestamps = np.zeros(len(unique_labels))
-    max_timestamps = np.zeros(len(unique_labels))
-    x_min = np.zeros(len(unique_labels))
-    x_max = np.zeros(len(unique_labels))
-    y_min = np.zeros(len(unique_labels))
-    y_max = np.zeros(len(unique_labels))
-    z_min = np.zeros(len(unique_labels))
-    z_max = np.zeros(len(unique_labels))
-    for i, label in enumerate(labels):
-        hits_cluster = hits[hits['cluster_index'] == label + hits_size]
-        min_timestamps[label] = np.min(hits_cluster['t'])
-        max_timestamps[label] = np.max(hits_cluster['t'])
-        x_min[label] = np.min(hits_cluster['x'])
-        x_max[label] = np.max(hits_cluster['x'])
-        y_min[label] = np.min(hits_cluster['y'])
-        y_max[label] = np.max(hits_cluster['y'])
-        z_min[label] = np.min(hits_cluster['z_anode'])
-        z_max[label] = np.max(hits_cluster['z_anode'])
+    #min_timestamps = np.zeros(len(unique_labels))
+    #max_timestamps = np.zeros(len(unique_labels))
+    #x_min = np.zeros(len(unique_labels))
+    #x_max = np.zeros(len(unique_labels))
+    #y_min = np.zeros(len(unique_labels))
+    #y_max = np.zeros(len(unique_labels))
+    #z_min = np.zeros(len(unique_labels))
+    #z_max = np.zeros(len(unique_labels))
+    #for i, label in enumerate(labels):
+    #    hits_cluster = hits[hits['cluster_index'] == label + hits_size]
+    #    min_timestamps[label] = np.min(hits_cluster['t'])
+    #    max_timestamps[label] = np.max(hits_cluster['t'])
+    #    x_min[label] = np.min(hits_cluster['x'])
+    #    x_max[label] = np.max(hits_cluster['x'])
+    #    y_min[label] = np.min(hits_cluster['y'])
+    #    y_max[label] = np.max(hits_cluster['y'])
+    #    z_min[label] = np.min(hits_cluster['z_anode'])
+    #    z_max[label] = np.max(hits_cluster['z_anode'])
         
         
-    #label_indices = np.concatenate(([0], np.flatnonzero(labels[:-1] != labels[1:])+1, [len(labels)]))
-    #label_timestamps = np.split(txyz[:,0], label_indices[1:-1])
-    #label_x = np.split(txyz[:,1], label_indices[1:-1])
-    #label_y = np.split(txyz[:,2], label_indices[1:-1])
-    #label_z = np.split(txyz[:,3], label_indices[1:-1])
+    label_indices = np.concatenate(([0], np.flatnonzero(labels[:-1] != labels[1:])+1, [len(labels)]))
+    label_timestamps = np.split(txyz[:,0]/(v_drift*1e1) * 1e3, label_indices[1:-1])
+    label_x = np.split(txyz[:,1], label_indices[1:-1])
+    label_y = np.split(txyz[:,2], label_indices[1:-1])
+    label_z = np.split(txyz[:,3], label_indices[1:-1])
     
-    #min_timestamps = np.array(list(map(np.min, label_timestamps)), dtype='i8')
-    #max_timestamps = np.array(list(map(np.max, label_timestamps)), dtype='i8')
-    
+    min_timestamps = np.array(list(map(np.min, label_timestamps)), dtype='i8')
+    max_timestamps = np.array(list(map(np.max, label_timestamps)), dtype='i8')
     # save array of event information
     n_vals = np.bincount(labels)
     io_group_vals = np.bincount(labels, weights=io_group)[n_vals != 0]
@@ -106,31 +110,34 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     q_vals = q_vals[n_vals != 0]
     n_vals = n_vals[n_vals != 0] # get rid of n_vals that are 0, otherwise get divide by 0 later
     
-    #x_min = list(map(np.min, label_x))
-    #x_max = list(map(np.max, label_x))
-    #y_min = list(map(np.min, label_y))
-    #y_max = list(map(np.max, label_y))
-    #z_min = list(map(np.min, label_z))
-    #z_max = list(map(np.max, label_z))
+    x_min = list(map(np.min, label_x))
+    x_max = list(map(np.max, label_x))
+    y_min = list(map(np.min, label_y))
+    y_max = list(map(np.max, label_y))
+    z_min = list(map(np.min, label_z))
+    z_max = list(map(np.max, label_z))
     
     clusters = np.zeros((len(n_vals),), dtype=consts.clusters_dtype)
     clusters['nhit'] = n_vals
     clusters['q'] = q_vals
     clusters['unix'] = (unix_vals/n_vals).astype('i8') # all of these hits should have the same unix anyway
     clusters['io_group'] = (io_group_vals/n_vals).astype('i4')
-    clusters['t_min'] = min_timestamps.astype('i8')
+    clusters['t_min'] = min_timestamps
     clusters['t_mid'] = ((min_timestamps + max_timestamps)/2).astype('i8')
-    clusters['t_max'] = (max_timestamps).astype('i8')
-    clusters['x_min'] = np.array(x_min, dtype='i8')
-    clusters['x_max'] = np.array(x_max, dtype='i8')
-    clusters['x_mid'] = ((np.array(x_min) + np.array(x_max))/2).astype('i8')
-    clusters['y_min'] = np.array(y_min, dtype='i8')
-    clusters['y_mid'] = ((np.array(y_min) + np.array(y_max))/2).astype('i8')
-    clusters['y_max'] = np.array(y_max, dtype='i8')
-    clusters['z_min'] = np.array(z_min, dtype='i8')
-    clusters['z_mid'] = ((np.array(z_min) + np.array(z_max))/2).astype('i8')
-    clusters['z_max'] = np.array(z_max, dtype='i8')
-    clusters['matched'] = np.zeros(len(n_vals), dtype='i4')
+    clusters['t_max'] = max_timestamps
+    clusters['x_min'] = np.array(x_min, dtype='f8')
+    clusters['x_max'] = np.array(x_max, dtype='f8')
+    clusters['x_mid'] = ((np.array(x_min) + np.array(x_max))/2).astype('f8')
+    clusters['y_min'] = np.array(y_min, dtype='f8')
+    clusters['y_mid'] = ((np.array(y_min) + np.array(y_max))/2).astype('f8')
+    clusters['y_max'] = np.array(y_max, dtype='f8')
+    clusters['z_min'] = np.array(z_min, dtype='f8')
+    clusters['z_mid'] = ((np.array(z_min) + np.array(z_max))/2).astype('f8')
+    clusters['z_max'] = np.array(z_max, dtype='f8')
+    clusters['z_drift_min'] = np.ones(len(n_vals), dtype='f8')*-1
+    clusters['z_drift_mid'] = np.ones(len(n_vals), dtype='f8')*-1
+    clusters['z_drift_max'] = np.ones(len(n_vals), dtype='f8')*-1
+    clusters['matched'] = np.zeros(len(n_vals), dtype='i4')*-1
     clusters['ext_trig_index'] = np.ones(len(n_vals), dtype='i4')*-1
     clusters['light_index'] = np.ones(len(n_vals), dtype='i4')*-1
     clusters['t0'] = np.ones(len(n_vals), dtype='i4')*-1
@@ -175,12 +182,11 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex):
         mc_assn = mc_assn[packets_keep_mask]
         
     v_ped, v_cm, v_ref, unique_ids = calibrations(packets, mc_assn, module)
-    db = cluster_packets(eps, min_samples, txyz)
+    db = cluster_packets(eps, min_samples, txyz[:,0:4])
     labels = np.array(db.labels_)
     
     dataword = np.copy(packets['dataword'])
     io_group = np.copy(packets['io_group'])
-    
     
     if np.size(labels) > 0:
         clusters, hits = \

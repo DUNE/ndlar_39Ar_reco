@@ -43,7 +43,7 @@ def zip_pixel_tyz(packets,ts, pixel_xy, module):
         
         dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
         if dict_values is not None:
-            xyz_values.append(dict_values)
+            xyz_values.append([dict_values[0], dict_values[1], dict_values[2], dict_values[3]])
             ts_inmm.append(v_drift*1e1*ts[i]*0.1)
             packets_keep_mask[i] = True
         #else:
@@ -60,5 +60,6 @@ def zip_pixel_tyz(packets,ts, pixel_xy, module):
         else:
             pass
     txyz = np.hstack((ts_inmm[:, np.newaxis], xyz_values))
+    
     return txyz, packets_keep_mask
 
