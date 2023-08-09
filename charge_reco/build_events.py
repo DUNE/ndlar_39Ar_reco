@@ -19,7 +19,7 @@ def getEventIDs(txyz, mc_assn, tracks, event_ids):
     for i in range(len(txyz)):
         index = int(mc_assn[i][0][0])
         tracks_index = tracks[index]
-        event_id = tracks_index['event_id']
+        event_id = tracks_index[consts.EVENT_SEPARATOR]
         event_ids[i] = event_id
 
 def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,unique_ids, \
@@ -72,28 +72,6 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     labels_global += hits_size
     hits['cluster_index'] = labels_global
     hits['event_id'] = event_ids
-    
-    #timestamps = np.copy(txyz[:,0])[indices_sorted]
-    
-    #min_timestamps = np.zeros(len(unique_labels))
-    #max_timestamps = np.zeros(len(unique_labels))
-    #x_min = np.zeros(len(unique_labels))
-    #x_max = np.zeros(len(unique_labels))
-    #y_min = np.zeros(len(unique_labels))
-    #y_max = np.zeros(len(unique_labels))
-    #z_min = np.zeros(len(unique_labels))
-    #z_max = np.zeros(len(unique_labels))
-    #for i, label in enumerate(labels):
-    #    hits_cluster = hits[hits['cluster_index'] == label + hits_size]
-    #    min_timestamps[label] = np.min(hits_cluster['t'])
-    #    max_timestamps[label] = np.max(hits_cluster['t'])
-    #    x_min[label] = np.min(hits_cluster['x'])
-    #    x_max[label] = np.max(hits_cluster['x'])
-    #    y_min[label] = np.min(hits_cluster['y'])
-    #    y_max[label] = np.max(hits_cluster['y'])
-    #    z_min[label] = np.min(hits_cluster['z_anode'])
-    #    z_max[label] = np.max(hits_cluster['z_anode'])
-        
         
     label_indices = np.concatenate(([0], np.flatnonzero(labels[:-1] != labels[1:])+1, [len(labels)]))
     label_timestamps = np.split(txyz[:,0]/(v_drift*1e1) * 1e3, label_indices[1:-1])
@@ -103,6 +81,7 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     
     min_timestamps = np.array(list(map(np.min, label_timestamps)), dtype='i8')
     max_timestamps = np.array(list(map(np.max, label_timestamps)), dtype='i8')
+    
     # save array of event information
     n_vals = np.bincount(labels)
     io_group_vals = np.bincount(labels, weights=io_group)[n_vals != 0]
