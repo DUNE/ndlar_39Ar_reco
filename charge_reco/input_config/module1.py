@@ -25,10 +25,12 @@ PACMAN_clock_correction1 = [0., -2.5825e-07]
 PACMAN_clock_correction2 = [0., 4.0650e-07]
 PACMAN_clock_correction = True
 timestamp_cut = True
-
+nBatches = 400
+batches_limit = 50
 # matching
 ext_trig_matching_tolerance_unix = 1
 ext_trig_matching_tolerance_PPS = 1.5e3 # ns
 from consts import drift_distance, v_drift
-charge_light_matching_PPS_window = int(drift_distance / v_drift * 1e3)
+#charge_light_matching_PPS_window = int(drift_distance / v_drift * 1e3)
+charge_light_matching_PPS_window = 400000
 charge_light_matching_unix_window = 0
