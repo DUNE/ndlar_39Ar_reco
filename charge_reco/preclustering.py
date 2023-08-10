@@ -43,14 +43,16 @@ def zip_pixel_tyz(packets,ts, pixel_xy, module, disabled_channel_IDs):
         channel_id = channel_ids[i]
         unique_id = get_packet_unique_id(packets[i])
         
-        if disabled_channel_IDs is not None and not np.any(np.isin(disabled_channel_IDs, int(unique_id))):
-            dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
-            if dict_values is not None:
+        dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
+        if dict_values is not None:
+            if disabled_channel_IDs is not None and np.any(np.isin(disabled_channel_IDs, int(unique_id))):
+                pass
+            else:
                 xyz_values.append([dict_values[0], dict_values[1], dict_values[2], dict_values[3]])
                 ts_inmm.append(v_drift*1e1*ts[i]*0.1)
                 packets_keep_mask[i] = True
-            #else:
-                #print(f'KeyError {(io_group, io_channel, chip_id, channel_id)}')
+        #else:
+            #print(f'KeyError {(io_group, io_channel, chip_id, channel_id)}')
     xyz_values = np.array(xyz_values)
     ts_inmm = np.array(ts_inmm)
     
