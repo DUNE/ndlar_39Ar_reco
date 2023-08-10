@@ -79,23 +79,11 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         print("No 'mc_packets_assn' or 'segments' dataset found, processing as real data.")
     
     analysis_start = time.time()
-    # load disabled channels npz file (for e.g. excluding noisy channels)
     if module.use_disabled_channels_list:
         disabled_channels = np.load(module.disabled_channels_list)
-        keys = disabled_channels['keys']
-
-        unique_ids_packets = ((((packets['io_group'].astype(int)) * 256 \
-            + packets['io_channel'].astype(int)) * 256 \
-            + packets['chip_id'].astype(int)) * 64 \
-            + packets['channel_id'].astype(int)).astype(int)
-
-        nonType0_mask = packets['packet_type'] != 0
-        unique_ids_packets[nonType0_mask] = -1 # just to make sure we don't remove non data packets
-
-        print('Removing noisy packets...')
-        packets_to_keep_mask = np.isin(unique_ids_packets, keys, invert=True)
-        packets = packets[packets_to_keep_mask]
-        print('Finished. Removed ', 100 - np.sum(packets['packet_type'] == 0)/np.sum(np.invert(nonType0_mask)) * 100, ' % of data packets.')
+        disabled_channel_IDs = np.array(disabled_channels['keys']).astype('int')
+    else:
+        disabled_channel_IDs = None
     
     nBatches = module.nBatches
     batches_limit = module.batches_limit
@@ -118,7 +106,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
             mc_assn = np.array(mc_assn[index_start:index_end])
         
         clusters, ext_trig, hits = \
-            analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex)
+            analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex, disabled_channel_IDs)
         
         list_of_trigs = []
         # match clusters to external triggers
@@ -143,12 +131,8 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
                     # mark both ext triggers with a unique light trig id
                     index_of_trig = np.where(ext_trig_mask)[0]
                     if len(index_of_trig) == 1:
-                        #print(index_of_trig)
-                        #print(f"Before: j-th light_trig_id in ext trig = {ext_trig[j]['light_trig_id']}, matched trig light_trig_id = {ext_trig[ext_trig_mask]['light_trig_id']}")
                         np.put(ext_trig['light_trig_id'], index_of_trig, light_trig_id)
                         np.put(ext_trig['light_trig_id'], j, light_trig_id)
-                        #print(f"After: j-th light_trig_id in ext trig = {ext_trig[j]['light_trig_id']}, matched trig light_trig_id = {ext_trig[ext_trig_mask]['light_trig_id']}")
-                        #print(' ')
                         list_of_trigs.append(index_of_trig)
                         light_trig_id += 1
                 

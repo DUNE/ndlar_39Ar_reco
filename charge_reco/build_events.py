@@ -124,7 +124,7 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     clusters['light_trig_id'] = np.ones(len(n_vals), dtype='i4')*-1
     return clusters, hits
 
-def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex):
+def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex, disabled_channel_IDs):
     ## do charge reconstruction
     clusters = np.zeros((0,), dtype=consts.clusters_dtype)
     hits = np.zeros((0,), dtype=consts.hits_dtype)
@@ -154,7 +154,7 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex):
     ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix, module)
     
     # zip up x, y, z, and t values for clustering
-    txyz, packets_keep_mask = zip_pixel_tyz(packets, ts, pixel_xy, module)
+    txyz, packets_keep_mask = zip_pixel_tyz(packets, ts, pixel_xy, module, disabled_channel_IDs)
     
     # remove packets with key errors
     packets = packets[packets_keep_mask]

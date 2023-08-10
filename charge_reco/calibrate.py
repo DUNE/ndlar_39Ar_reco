@@ -3,12 +3,16 @@ import json
 from collections import defaultdict
 from consts import *
 
-def calibrations(packets, mc_assn, module):
+def get_packet_unique_id(packets):
     # unique id for each pixel, not to be confused with larnd-sim's pixel id
     unique_ids = ((((packets['io_group'].astype(int)) * 256 \
         + packets['io_channel'].astype(int)) * 256 \
         + packets['chip_id'].astype(int)) * 64 \
         + packets['channel_id'].astype(int)).astype(str)
+    return unique_ids
+
+def calibrations(packets, mc_assn, module):
+    unique_ids = get_packet_unique_id(packets)
     v_ped, v_cm, v_ref = pedestal_and_config(unique_ids, mc_assn, module)
     return v_ped, v_cm, v_ref, unique_ids
 

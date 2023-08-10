@@ -1,5 +1,6 @@
 import pickle
 from calibrate import timestamp_corrector
+from calibrate import get_packet_unique_id
 from consts import *
 import numpy as np
 import yaml
@@ -10,7 +11,7 @@ def load_geom_dict(geom_dict_path):
         geom_dict = pickle.load(f_geom_dict)
     return geom_dict
 
-def zip_pixel_tyz(packets,ts, pixel_xy, module):
+def zip_pixel_tyz(packets,ts, pixel_xy, module, disabled_channel_IDs):
     ## form zipped array using info from dictionary to use in clustering
     ## calculates first relative packet coordinates in each module, then adjust by TPC offsets
     ## some of this code copied from larnd-sim
@@ -40,14 +41,16 @@ def zip_pixel_tyz(packets,ts, pixel_xy, module):
         io_channel = io_channels[i]
         chip_id = chip_ids[i]
         channel_id = channel_ids[i]
+        unique_id = get_packet_unique_id(packets[i])
         
-        dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
-        if dict_values is not None:
-            xyz_values.append([dict_values[0], dict_values[1], dict_values[2], dict_values[3]])
-            ts_inmm.append(v_drift*1e1*ts[i]*0.1)
-            packets_keep_mask[i] = True
-        #else:
-            #print(f'KeyError {(io_group, io_channel, chip_id, channel_id)}')
+        if disabled_channel_IDs is not None and not np.any(np.isin(disabled_channel_IDs, int(unique_id))):
+            dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
+            if dict_values is not None:
+                xyz_values.append([dict_values[0], dict_values[1], dict_values[2], dict_values[3]])
+                ts_inmm.append(v_drift*1e1*ts[i]*0.1)
+                packets_keep_mask[i] = True
+            #else:
+                #print(f'KeyError {(io_group, io_channel, chip_id, channel_id)}')
     xyz_values = np.array(xyz_values)
     ts_inmm = np.array(ts_inmm)
     
