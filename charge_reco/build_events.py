@@ -65,13 +65,14 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     hits['x'] = txyz[:,1]
     hits['y'] = txyz[:,2]
     hits['z_anode'] = txyz[:,3]
-    hits['z_drift'] = txyz[:,4]
+    hits['z_drift'] = txyz[:,3]
     hits['unique_id'] = unique_ids
     hits['unix'] = unix
     labels_global = np.copy(labels)
     labels_global += hits_size
     hits['cluster_index'] = labels_global
     hits['event_id'] = event_ids
+    hits['light_trig_id'] = np.ones(len(labels), dtype='i4')*-1
         
     label_indices = np.concatenate(([0], np.flatnonzero(labels[:-1] != labels[1:])+1, [len(labels)]))
     label_timestamps = np.split(txyz[:,0]/(v_drift*1e1) * 1e3, label_indices[1:-1])
@@ -120,6 +121,7 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     clusters['ext_trig_index'] = np.ones(len(n_vals), dtype='i4')*-1
     clusters['light_index'] = np.ones(len(n_vals), dtype='i4')*-1
     clusters['t0'] = np.ones(len(n_vals), dtype='i4')*-1
+    clusters['light_trig_id'] = np.ones(len(n_vals), dtype='i4')*-1
     return clusters, hits
 
 def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex):
@@ -146,6 +148,7 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex):
     ext_trig['unix'] = unix_pt7
     ext_trig['ts_PPS'] = PPS_pt7
     ext_trig['io_group'] = io_group_pt7
+    ext_trig['light_trig_id'] = np.ones_like(io_group_pt7)*-1
     
     # apply a few PPS timestamp corrections, and select only data packets for analysis
     ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix, module)

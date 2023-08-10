@@ -106,12 +106,13 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
     index_start = 0
     index_end = batch_size
 
-    PPS_window = module.charge_light_matching_PPS_window
+    lower_PPS_window = module.charge_light_matching_lower_PPS_window
+    upper_PPS_window = module.charge_light_matching_upper_PPS_window
     unix_window = module.charge_light_matching_unix_window
     z_drift_factor = 10*consts.v_drift/1e3
-    lower_PPS_window = PPS_window
-    upper_PPS_window = PPS_window
-    for i in tqdm(range(batches_limit), desc = 'Processing batches...'):
+    light_trig_id = 0
+    
+    for i in tqdm(range(batches_limit), desc = ' Processing batches...'):
         packets_batch = np.array(packets[index_start:index_end])
         if mc_assn is not None:
             mc_assn = np.array(mc_assn[index_start:index_end])
@@ -119,6 +120,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         clusters, ext_trig, hits = \
             analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex)
         
+        list_of_trigs = []
         # match clusters to external triggers
         if match_charge_to_ext_trig:
             for j, trig in enumerate(ext_trig):
@@ -131,26 +133,37 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
                 np.put(clusters['ext_trig_index'], matched_clusters_indices, j+ext_trig_max_index)
                 np.put(clusters['t0'], matched_clusters_indices, trig['ts_PPS'])
                 
-                #print(f"PPS_window={PPS_window}, \n trig io group={trig['io_group']}, trig PPS={trig['ts_PPS']}, trig unix={trig['unix'].astype('f8')}, j={j}")
-                #if len(matched_clusters_indices)>0:
-                #    print('min t_min clusters = ',np.min(clusters['t_min'][matched_clusters_mask]))
-                #    print('min t_max clusters = ',np.max(clusters['t_max'][matched_clusters_mask]))
-                #    print(f'total number of matches = {np.sum(matched_clusters_mask)}')
+                # find the external trigger from the other io group that corresponds to the same light trigger
+                # NOTE: be careful with this in 2x2
+                if j not in list_of_trigs:
+                    ext_trig_mask = (trig['unix'] == ext_trig['unix']) & \
+                        (ext_trig['ts_PPS'] < trig['ts_PPS'] + module.ext_trig_PPS_window) & \
+                        (ext_trig['ts_PPS'] > trig['ts_PPS'] - module.ext_trig_PPS_window) & \
+                        (ext_trig['io_group'] != trig['io_group'])
+                    # mark both ext triggers with a unique light trig id
+                    index_of_trig = np.where(ext_trig_mask)[0]
+                    if len(index_of_trig) == 1:
+                        #print(index_of_trig)
+                        #print(f"Before: j-th light_trig_id in ext trig = {ext_trig[j]['light_trig_id']}, matched trig light_trig_id = {ext_trig[ext_trig_mask]['light_trig_id']}")
+                        np.put(ext_trig['light_trig_id'], index_of_trig, light_trig_id)
+                        np.put(ext_trig['light_trig_id'], j, light_trig_id)
+                        #print(f"After: j-th light_trig_id in ext trig = {ext_trig[j]['light_trig_id']}, matched trig light_trig_id = {ext_trig[ext_trig_mask]['light_trig_id']}")
+                        #print(' ')
+                        list_of_trigs.append(index_of_trig)
+                        light_trig_id += 1
+                
                 # loop through hits in clusters to calculate drift position
                 for cluster_index in matched_clusters_indices:
                     hits_this_cluster_mask = hits['cluster_index'] == cluster_index + hits_max_cindex
                     hits_this_cluster = np.copy(hits[hits_this_cluster_mask])
-                    #driftFactor = np.ones(len(hits_this_cluster))
-                    #driftFactor[hits_this_cluster['z_anode'] <= 0] = 1
-                    #driftFactor[hits_this_cluster['z_anode'] > 0] = -1
                     z_drift_shift = hits_this_cluster['z_drift']*(hits_this_cluster['t'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
                     z_drift = hits_this_cluster['z_anode'] + z_drift_shift
-                    #print(f"hits z anode = {hits_this_cluster['z_anode']}, \n {hits_this_cluster['z_drift']}, cluster t0 = {clusters[cluster_index]['t0']}, hits t={hits_this_cluster['t']}, z_drift_factor={z_drift_factor}, z_drift_shift={z_drift_shift}, z_drift={z_drift}")
-                    #print(' ')
                     np.put(hits['z_drift'], np.where(hits_this_cluster_mask)[0], z_drift)
+                    np.put(hits['light_trig_id'], np.where(hits_this_cluster_mask)[0], ext_trig['light_trig_id'][j])
                     np.put(clusters['z_drift_mid'], cluster_index, np.mean(z_drift))
                     np.put(clusters['z_drift_min'], cluster_index, np.min(z_drift))
                     np.put(clusters['z_drift_max'], cluster_index, np.max(z_drift))
+                    np.put(clusters['light_trig_id'], cluster_index, ext_trig['light_trig_id'][j])
                     
                     
         # making sure to continously increment cluster_index as we go onto the next batch
