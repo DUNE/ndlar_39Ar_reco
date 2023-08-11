@@ -72,7 +72,6 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     labels_global += hits_size
     hits['cluster_index'] = labels_global
     hits['event_id'] = event_ids
-    hits['light_trig_id'] = np.ones(len(labels), dtype='i4')*-1
         
     label_indices = np.concatenate(([0], np.flatnonzero(labels[:-1] != labels[1:])+1, [len(labels)]))
     label_timestamps = np.split(txyz[:,0]/(v_drift*1e1) * 1e3, label_indices[1:-1])
@@ -121,7 +120,6 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     clusters['ext_trig_index'] = np.ones(len(n_vals), dtype='i4')*-1
     clusters['light_index'] = np.ones(len(n_vals), dtype='i4')*-1
     clusters['t0'] = np.ones(len(n_vals), dtype='i4')*-1
-    clusters['light_trig_id'] = np.ones(len(n_vals), dtype='i4')*-1
     return clusters, hits
 
 def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex, disabled_channel_IDs):
@@ -144,11 +142,24 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex, disabled_ch
     unix_pt7 = np.copy(unix_timestamps)[pkt_7_mask].astype('i8')
     unix = np.copy(unix_timestamps)[pkt_0_mask].astype('i8')
     
-    ext_trig = np.zeros((np.size(unix_pt7),), dtype=consts.ext_trig_dtype)
-    ext_trig['unix'] = unix_pt7
-    ext_trig['ts_PPS'] = PPS_pt7
-    ext_trig['io_group'] = io_group_pt7
-    ext_trig['light_trig_id'] = np.ones_like(io_group_pt7)*-1
+    # match together external triggers corresponding to single light triggers
+    threshold = 500
+    differences = PPS_pt7[:, None] - PPS_pt7
+    mask = np.abs(differences) < threshold
+    mask = mask * np.tri(*mask.shape, k=-1)
+    i, j = np.where(mask)
+    #pairs = [(PPS_pt7[x], PPS_pt7[y]) for x, y in zip(i, j)]
+    PPS_matched = []
+    unix_matched = [] # add eventually a module identifier
+    # loop through matched ext triggers and make single arrays for PPS and unix timestamps
+    for x, y in zip(i,j):
+        if unix_pt7[x] == unix_pt7[y]:
+            PPS_matched.append(int((float(PPS_pt7[x]) + float(PPS_pt7[y]))/2))
+            unix_matched.append(unix_pt7[x])
+            
+    ext_trig = np.zeros((np.size(PPS_matched),), dtype=consts.ext_trig_dtype)
+    ext_trig['unix'] = np.array(unix_matched).astype('i8')
+    ext_trig['t'] = np.array(PPS_matched).astype('i8')
     
     # apply a few PPS timestamp corrections, and select only data packets for analysis
     ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix, module)

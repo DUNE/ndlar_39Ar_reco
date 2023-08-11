@@ -118,28 +118,13 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         if match_charge_to_ext_trig:
             for j, trig in enumerate(ext_trig):
                 # match clusters to ext triggers
-                matched_clusters_mask = (clusters['t_min'] > trig['ts_PPS'] - lower_PPS_window) & \
-                                        (clusters['t_max'] < trig['ts_PPS'] + upper_PPS_window) & \
-                                        (trig['unix'] == clusters['unix']) & \
-                                        (clusters['io_group'] == trig['io_group'])
+                matched_clusters_mask = (clusters['t_min'] > trig['t'] - lower_PPS_window) & \
+                                        (clusters['t_max'] < trig['t'] + upper_PPS_window) & \
+                                        (trig['unix'] == clusters['unix']) #& \
+                                        #(clusters['io_group'] == trig['io_group'])
                 matched_clusters_indices = np.where(matched_clusters_mask)[0]
                 np.put(clusters['ext_trig_index'], matched_clusters_indices, j+ext_trig_max_index)
-                np.put(clusters['t0'], matched_clusters_indices, trig['ts_PPS'])
-                
-                # find the external trigger from the other io group that corresponds to the same light trigger
-                # NOTE: be careful with this in 2x2
-                if j not in list_of_trigs:
-                    ext_trig_mask = (trig['unix'] == ext_trig['unix']) & \
-                        (ext_trig['ts_PPS'] < trig['ts_PPS'] + module.ext_trig_PPS_window) & \
-                        (ext_trig['ts_PPS'] > trig['ts_PPS'] - module.ext_trig_PPS_window) & \
-                        (ext_trig['io_group'] != trig['io_group'])
-                    # mark both ext triggers with a unique light trig id
-                    index_of_trig = np.where(ext_trig_mask)[0]
-                    if len(index_of_trig) == 1:
-                        np.put(ext_trig['light_trig_id'], index_of_trig, light_trig_id)
-                        np.put(ext_trig['light_trig_id'], j, light_trig_id)
-                        list_of_trigs.append(index_of_trig)
-                        light_trig_id += 1
+                np.put(clusters['t0'], matched_clusters_indices, trig['t'])
                 
                 # loop through hits in clusters to calculate drift position
                 for cluster_index in matched_clusters_indices:
@@ -148,17 +133,15 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
                     z_drift_shift = hits_this_cluster['z_drift']*(hits_this_cluster['t'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
                     z_drift = hits_this_cluster['z_anode'] + z_drift_shift
                     np.put(hits['z_drift'], np.where(hits_this_cluster_mask)[0], z_drift)
-                    np.put(hits['light_trig_id'], np.where(hits_this_cluster_mask)[0], ext_trig['light_trig_id'][j])
                     np.put(clusters['z_drift_mid'], cluster_index, np.mean(z_drift))
                     np.put(clusters['z_drift_min'], cluster_index, np.min(z_drift))
                     np.put(clusters['z_drift_max'], cluster_index, np.max(z_drift))
-                    np.put(clusters['light_trig_id'], cluster_index, ext_trig['light_trig_id'][j])
         matching_end_time = time.time()
-                    
+               
         # making sure to continously increment cluster_index as we go onto the next batch
         hits_max_cindex = np.max(hits['cluster_index'])+1
         ext_trig_max_index += len(ext_trig)
-        #print(f"hits_max_cindex = {hits_max_cindex}")
+        
         if i == 0:
             # create the hdf5 datasets with initial results
             with h5py.File(output_events_filename, 'a') as output_file:
