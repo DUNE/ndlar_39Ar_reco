@@ -101,15 +101,20 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
     light_trig_id = 0
     
     for i in tqdm(range(batches_limit), desc = ' Processing batches...'):
+        batch_start_time = time.time()
+        
         packets_batch = np.array(packets[index_start:index_end])
         if mc_assn is not None:
             mc_assn = np.array(mc_assn[index_start:index_end])
         
+        analysis_start_time = time.time()
         clusters, ext_trig, hits = \
             analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex, disabled_channel_IDs)
+        analysis_end_time = time.time()
         
         list_of_trigs = []
         # match clusters to external triggers
+        matching_start_time = time.time()
         if match_charge_to_ext_trig:
             for j, trig in enumerate(ext_trig):
                 # match clusters to ext triggers
@@ -148,7 +153,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
                     np.put(clusters['z_drift_min'], cluster_index, np.min(z_drift))
                     np.put(clusters['z_drift_max'], cluster_index, np.max(z_drift))
                     np.put(clusters['light_trig_id'], cluster_index, ext_trig['light_trig_id'][j])
-                    
+        matching_end_time = time.time()
                     
         # making sure to continously increment cluster_index as we go onto the next batch
         hits_max_cindex = np.max(hits['cluster_index'])+1
@@ -172,7 +177,15 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
                 
         index_start += batch_size
         index_end += batch_size
-    
+        batch_end_time = time.time()
+        if consts.time_the_reconstruction:
+            batch_total_time = batch_end_time-batch_start_time
+            analysis_total_time = analysis_end_time-analysis_start_time
+            print(f"Batch {i} took {(batch_total_time):.3f} seconds")
+            print(f"Analysis function took {analysis_total_time:.3f} seconds, and {(analysis_total_time/batch_total_time * 100):.3f}% of the total time.")
+            if match_charge_to_ext_trig:
+                matching_total_time = matching_end_time - matching_start_time
+                print(f"Ext trigger matching took {matching_total_time:.3f} seconds, and {(matching_total_time/batch_total_time  * 100):.3f}% of the total time.")
     print('Saving reconstruction results to ', output_events_filename)
     analysis_end = time.time()
     print(f'Time to do full analysis = {((analysis_end-analysis_start)/60):.3f} minutes')

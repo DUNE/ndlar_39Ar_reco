@@ -34,3 +34,4 @@ clusters_dtype = np.dtype([('nhit', '<i4'), ('q', '<f8'),('io_group', '<i4'),\
 ext_trig_dtype = np.dtype([('unix', '<i8'), ('ts_PPS', '<i8'), ('io_group', '<i4'), ('light_trig_id', '<i4')])
 
 EVENT_SEPARATOR='eventID'
+time_the_reconstruction = True
