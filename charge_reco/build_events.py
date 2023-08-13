@@ -33,13 +33,9 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
     v_ped, v_cm, v_ref, unique_ids = [], [], [], []
     packets_keep_mask = np.zeros(len(packets), dtype=bool)
     for i in range(len(packets['io_channel'])):
-        io_group = io_groups_rel[i]
-        io_channel = packets['io_channel'][i]
-        chip_id = packets['chip_id'][i]
-        channel_id = packets['channel_id'][i]
-        unique_id = get_packet_unique_id(packets[i])
+        unique_id = ((io_groups_rel[i].astype('i8') * 256 + packets[i]['io_channel'].astype('i8')) * 256 + packets[i]['chip_id'].astype('i8'))*64 + packets[i]['channel_id'].astype('i8')
         
-        dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
+        dict_values = pixel_xy.get(unique_id)
         if dict_values is not None:
             if disabled_channel_IDs is not None and np.any(np.isin(disabled_channel_IDs, int(unique_id))):
                 pass # pass if packet is from channel that is in the disabled channels list
@@ -57,7 +53,7 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
                     v_cm.append(v_cm_sim)
                     v_ref.append(v_ref_sim)
         #else:
-            #print(f'KeyError {(io_group, io_channel, chip_id, channel_id)}')
+        #    print(f'KeyError {(packets[i]['io_group'], packets[i]['io_channel'], packets[i]['chip_id'], packets[i]['channel_id'])}')
     xyz_values = np.array(xyz_values)
     ts_inmm = np.array(ts_inmm)
     v_ped = np.array(v_ped)
@@ -74,7 +70,7 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
         else:
             pass
     txyz = np.hstack((ts_inmm[:, np.newaxis], xyz_values))
-    
+    #np.savez('txyz.npz', txyz=txyz)
     return txyz, packets_keep_mask, v_ped, v_cm, v_ref, unique_ids
 
 def cluster_packets(eps,min_samples,txyz):
@@ -125,44 +121,42 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
         event_ids = np.ones_like(len(txyz))*-1
     
     # add hits to hits dataset
-    unique_labels = np.unique(labels)
     hits = np.zeros((np.size(labels),), dtype=consts.hits_dtype)
     hits['q'] = charge
     hits['io_group'] = io_group
-    hits['t'] = (txyz[:,0]/(v_drift*1e1) * 1e3).astype('i8')
+    hits['t'] = (txyz[:,0]*mm_to_ns).astype('i8')
     hits['x'] = txyz[:,1]
     hits['y'] = txyz[:,2]
     hits['z_anode'] = txyz[:,3]
     hits['z_drift'] = txyz[:,3]
     hits['unique_id'] = unique_ids
     hits['unix'] = unix
-    labels_global = np.copy(labels)
-    labels_global += hits_size
-    hits['cluster_index'] = labels_global
+    hits['cluster_index'] = labels + hits_size
     hits['event_id'] = event_ids
         
-    label_indices = np.concatenate(([0], np.flatnonzero(labels[:-1] != labels[1:])+1, [len(labels)]))
-    label_timestamps = np.split(txyz[:,0]/(v_drift*1e1) * 1e3, label_indices[1:-1])
-    label_x = np.split(txyz[:,1], label_indices[1:-1])
-    label_y = np.split(txyz[:,2], label_indices[1:-1])
-    label_z = np.split(txyz[:,3], label_indices[1:-1])
+    label_indices = np.concatenate(([0], np.flatnonzero(labels[:-1] != labels[1:])+1, [len(labels)]))[1:-1]
+    label_timestamps = np.split(txyz[:,0]*mm_to_ns, label_indices)
+    label_x = np.split(txyz[:,1], label_indices)
+    label_y = np.split(txyz[:,2], label_indices)
+    label_z = np.split(txyz[:,3], label_indices)
     
     min_timestamps = np.array(list(map(np.min, label_timestamps)), dtype='i8')
     max_timestamps = np.array(list(map(np.max, label_timestamps)), dtype='i8')
     
     # save array of event information
     n_vals = np.bincount(labels)
-    io_group_vals = np.bincount(labels, weights=io_group)[n_vals != 0]
-    unix_vals = np.bincount(labels, weights=unix)[n_vals != 0]
-    q_vals = q_vals[n_vals != 0]
-    n_vals = n_vals[n_vals != 0] # get rid of n_vals that are 0, otherwise get divide by 0 later
+    n_vals_mask = n_vals != 0
+    io_group_vals = np.bincount(labels, weights=io_group)[n_vals_mask]
+    unix_vals = np.bincount(labels, weights=unix)[n_vals_mask]
+    q_vals = q_vals[n_vals_mask]
+    n_vals = n_vals[n_vals_mask] # get rid of n_vals that are 0, otherwise get divide by 0 later
     
-    x_min = list(map(np.min, label_x))
-    x_max = list(map(np.max, label_x))
-    y_min = list(map(np.min, label_y))
-    y_max = list(map(np.max, label_y))
-    z_min = list(map(np.min, label_z))
-    z_max = list(map(np.max, label_z))
+    x_min = np.array(list(map(np.min, label_x)))
+    x_max = np.array(list(map(np.max, label_x)))
+    y_min = np.array(list(map(np.min, label_y)))
+    y_max = np.array(list(map(np.max, label_y)))
+    z_min = np.array(list(map(np.min, label_z)))
+    z_max = np.array(list(map(np.max, label_z)))
     
     clusters = np.zeros((len(n_vals),), dtype=consts.clusters_dtype)
     clusters['nhit'] = n_vals
@@ -172,22 +166,16 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     clusters['t_min'] = min_timestamps
     clusters['t_mid'] = ((min_timestamps + max_timestamps)/2).astype('i8')
     clusters['t_max'] = max_timestamps
-    clusters['x_min'] = np.array(x_min, dtype='f8')
-    clusters['x_max'] = np.array(x_max, dtype='f8')
-    clusters['x_mid'] = ((np.array(x_min) + np.array(x_max))/2).astype('f8')
-    clusters['y_min'] = np.array(y_min, dtype='f8')
-    clusters['y_mid'] = ((np.array(y_min) + np.array(y_max))/2).astype('f8')
-    clusters['y_max'] = np.array(y_max, dtype='f8')
-    clusters['z_min'] = np.array(z_min, dtype='f8')
-    clusters['z_mid'] = ((np.array(z_min) + np.array(z_max))/2).astype('f8')
-    clusters['z_max'] = np.array(z_max, dtype='f8')
-    clusters['z_drift_min'] = np.ones(len(n_vals), dtype='f8')*-1
-    clusters['z_drift_mid'] = np.ones(len(n_vals), dtype='f8')*-1
-    clusters['z_drift_max'] = np.ones(len(n_vals), dtype='f8')*-1
-    clusters['matched'] = np.zeros(len(n_vals), dtype='i4')*-1
+    clusters['x_min'] = x_min
+    clusters['x_max'] = x_max
+    clusters['x_mid'] = (x_min + x_max)/2
+    clusters['y_min'] = y_min
+    clusters['y_mid'] = (y_min + y_max)/2
+    clusters['y_max'] = y_max
+    clusters['z_min'] = z_min
+    clusters['z_mid'] = (z_min + z_max)/2
+    clusters['z_max'] = z_max
     clusters['ext_trig_index'] = np.ones(len(n_vals), dtype='i4')*-1
-    clusters['light_index'] = np.ones(len(n_vals), dtype='i4')*-1
-    clusters['t0'] = np.ones(len(n_vals), dtype='i4')*-1
     return clusters, hits
 
 def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
@@ -196,10 +184,13 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
     clusters = np.zeros((0,), dtype=consts.clusters_dtype)
     hits = np.zeros((0,), dtype=consts.hits_dtype)
     
+    start = time.time()
     pkt_7_mask = packets['packet_type'] == 7
     pkt_4_mask = packets['packet_type'] == 4
     pkt_0_mask = packets['packet_type'] == 0
-
+    make_packet_type_masks = time.time() - start
+    
+    start = time.time()
     # grab the PPS timestamps of pkt type 7s and correct for PACMAN clock drift
     PPS_pt7 = PACMAN_drift(packets, module)[pkt_7_mask].astype('i8')*1e-1*1e3 # ns
     io_group_pt7 = packets[pkt_7_mask]['io_group']
@@ -210,7 +201,9 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
     unix_timestamps = np.interp(np.arange(len(unix_timestamps)), nonzero_indices, unix_timestamps[nonzero_indices])
     unix_pt7 = np.copy(unix_timestamps)[pkt_7_mask].astype('i8')
     unix = np.copy(unix_timestamps)[pkt_0_mask].astype('i8')
-
+    get_PPS_unix_times = time.time() - start
+    
+    start = time.time()
     # match together external triggers corresponding to single light triggers
     threshold = 500
     differences = PPS_pt7[:, None] - PPS_pt7
@@ -228,14 +221,19 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
     ext_trig = np.zeros((np.size(PPS_matched),), dtype=consts.ext_trig_dtype)
     ext_trig['unix'] = np.array(unix_matched).astype('i8')
     ext_trig['t'] = np.array(PPS_matched).astype('i8')
-
+    match_ext_triggers = time.time() - start
+    
+    start = time.time()
     # apply a few PPS timestamp corrections, and select only data packets for analysis
     ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix, module)
-
+    ts_corrector_time = time.time() - start
+    
+    start = time.time()
     # zip up x, y, z, and t values for clustering
     txyz, packets_keep_mask, v_ped, v_cm, v_ref, unique_ids = zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, \
                                         disabled_channel_IDs, detprop, pedestal_dict, config_dict)
-
+    zip_time = time.time() - start
+    
     # remove packets with key errors
     packets = packets[packets_keep_mask]
     unix = unix[packets_keep_mask]
@@ -243,12 +241,15 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
     if mc_assn is not None:
         mc_assn = mc_assn[packets_keep_mask]
 
+    start = time.time()
     db = cluster_packets(eps, min_samples, txyz[:,0:4])
+    dbscan_time = time.time() - start
+    
     labels = np.array(db.labels_)
-
+    
+    start = time.time()
     dataword = np.copy(packets['dataword'])
     io_group = np.copy(packets['io_group'])
-    
     if np.size(labels) > 0:
         clusters, hits = \
             find_charge_clusters(labels,dataword,txyz,\
@@ -257,5 +258,11 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
             unique_ids=unique_ids,\
             hits_size=hits_max_cindex,\
             mc_assn=mc_assn, tracks=tracks)
-
-    return clusters, ext_trig, hits
+    find_charge_clusters_time = time.time() - start
+    
+    benchmarks = {'make_packet_type_masks': make_packet_type_masks, \
+                 'get_PPS_unix_times': get_PPS_unix_times, \
+                 'match_ext_triggers': match_ext_triggers, \
+                 'zip_time': zip_time, 'dbscan_time': dbscan_time, \
+                 'find_charge_clusters_time': find_charge_clusters_time}
+    return clusters, ext_trig, hits, benchmarks
