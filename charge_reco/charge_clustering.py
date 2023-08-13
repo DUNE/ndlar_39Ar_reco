@@ -104,7 +104,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
             mc_assn = np.array(mc_assn[index_start:index_end])
         
         analysis_start_time = time.time()
-        clusters, ext_trig, hits = \
+        clusters, ext_trig, hits, benchmarks = \
             analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex, disabled_channel_IDs, \
                      detprop, pedestal_dict, config_dict)
         analysis_end_time = time.time()
@@ -117,8 +117,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
                 # match clusters to ext triggers
                 matched_clusters_mask = (clusters['t_min'] > trig['t'] - lower_PPS_window) & \
                                         (clusters['t_max'] < trig['t'] + upper_PPS_window) & \
-                                        (trig['unix'] == clusters['unix']) #& \
-                                        #(clusters['io_group'] == trig['io_group'])
+                                        (trig['unix'] == clusters['unix'])
                 matched_clusters_indices = np.where(matched_clusters_mask)[0]
                 np.put(clusters['ext_trig_index'], matched_clusters_indices, j+ext_trig_max_index)
                 np.put(clusters['t0'], matched_clusters_indices, trig['t'])
@@ -163,9 +162,12 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
             analysis_total_time = analysis_end_time-analysis_start_time
             print(f"Batch {i} took {(batch_total_time):.3f} seconds")
             print(f"Analysis function took {analysis_total_time:.3f} seconds, and {(analysis_total_time/batch_total_time * 100):.3f}% of the total time.")
+            for benchmark_key in benchmarks.keys():
+                print(f"{benchmark_key} step took {benchmarks[benchmark_key]:.3f} seconds.")
             if match_charge_to_ext_trig:
                 matching_total_time = matching_end_time - matching_start_time
                 print(f"Ext trigger matching took {matching_total_time:.3f} seconds, and {(matching_total_time/batch_total_time  * 100):.3f}% of the total time.")
+            print(' ')
     print('Saving reconstruction results to ', output_events_filename)
     analysis_end = time.time()
     print(f'Time to do full analysis = {((analysis_end-analysis_start)/60):.3f} minutes')
