@@ -3,15 +3,15 @@
 Command-line interface to the charge clustering and matching to external triggers
 """
 from build_events import *
-from preclustering import *
 import h5py
 import fire
 import time
 import os
 from tqdm import tqdm
 import importlib.util
-import math
+from math import ceil
 import consts
+import loading
 
 def run_reconstruction(input_config_filename, input_filepath=None, output_filepath=None):
     ## main function
@@ -60,7 +60,10 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         else:
             pass
     # detector dictionary file must be pkl file made with larpix_readout_parser
-    pixel_xy = load_geom_dict(module.detector_dict_path)
+    pixel_xy = loading.load_geom_dict(module.detector_dict_path)
+    pedestal_dict, config_dict = loading.load_pedestal_and_config(module)
+    detprop = loading.load_detector_properties(module)
+    disabled_channel_IDs = loading.load_disabled_channels_list(module)
     
     # open packets file
     f = h5py.File(input_packets_filename)
@@ -79,18 +82,12 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         print("No 'mc_packets_assn' or 'segments' dataset found, processing as real data.")
     
     analysis_start = time.time()
-    if module.use_disabled_channels_list:
-        disabled_channels = np.load(module.disabled_channels_list)
-        disabled_channel_IDs = np.array(disabled_channels['keys']).astype('int')
-    else:
-        disabled_channel_IDs = None
-    
     nBatches = module.nBatches
     batches_limit = module.batches_limit
     # run reconstruction
     hits_max_cindex = 0
     ext_trig_max_index = 0
-    batch_size = math.ceil(len(packets)/nBatches)
+    batch_size = ceil(len(packets)/nBatches)
     index_start = 0
     index_end = batch_size
 
@@ -98,7 +95,6 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
     upper_PPS_window = module.charge_light_matching_upper_PPS_window
     unix_window = module.charge_light_matching_unix_window
     z_drift_factor = 10*consts.v_drift/1e3
-    light_trig_id = 0
     
     for i in tqdm(range(batches_limit), desc = ' Processing batches...'):
         batch_start_time = time.time()
@@ -109,7 +105,8 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         
         analysis_start_time = time.time()
         clusters, ext_trig, hits = \
-            analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex, disabled_channel_IDs)
+            analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex, disabled_channel_IDs, \
+                     detprop, pedestal_dict, config_dict)
         analysis_end_time = time.time()
         
         list_of_trigs = []

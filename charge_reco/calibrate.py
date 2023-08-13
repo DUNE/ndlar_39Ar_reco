@@ -1,20 +1,6 @@
 import numpy as np
 import json
-from collections import defaultdict
 from consts import *
-
-def get_packet_unique_id(packets):
-    # unique id for each pixel, not to be confused with larnd-sim's pixel id
-    unique_ids = ((((packets['io_group'].astype(int)) * 256 \
-        + packets['io_channel'].astype(int)) * 256 \
-        + packets['chip_id'].astype(int)) * 64 \
-        + packets['channel_id'].astype(int)).astype(str)
-    return unique_ids
-
-def calibrations(packets, mc_assn, module):
-    unique_ids = get_packet_unique_id(packets)
-    v_ped, v_cm, v_ref = pedestal_and_config(unique_ids, mc_assn, module)
-    return v_ped, v_cm, v_ref, unique_ids
 
 def adcs_to_mV(adcs, v_ref, v_cm, v_ped):
     ### converts adc counts to charge in mV
@@ -56,51 +42,3 @@ def timestamp_corrector(packets, mc_assn, unix, module):
         ts = PACMAN_drift(packets, module).astype('i8')
     
     return ts, packets, mc_assn, unix
-
-def pedestal_and_config(unique_ids, mc_assn, module):
-    # function to open the pedestal and configuration files to get the dictionaries
-    #   for the values of v_ped, v_cm, and v_ref for individual pixels. 
-    #   Values are fixed in simulation but vary in data depending on pixel.
-    # Inputs:
-    #   unique_ids: 
-    #       note: array containing a unique id for each pixel
-    #       size: same as packets dataset (after selections)
-    #   mc_assn:
-    #       note: mc_truth information for simulation (None for data)
-    # Returns:
-    #   v_ped, v_cm, v_ref, gain arrays; size of packets dataset
-
-    config_dict = defaultdict(lambda: dict(
-        vref_mv=1300,
-        vcm_mv=288
-    ))
-    pedestal_dict = defaultdict(lambda: dict(
-        pedestal_mv=580
-    ))
-    if module.use_ped_config_files:
-        pedestal_file = module.pedestal_file
-        config_file = module.config_file
-        # reading the data from the file
-        with open(pedestal_file,'r') as infile:
-            for key, value in json.load(infile).items():
-                pedestal_dict[key] = value
-
-        with open(config_file, 'r') as infile:
-            for key, value in json.load(infile).items():
-                config_dict[key] = value
-  
-    v_ped,v_cm,v_ref = np.zeros_like(unique_ids,dtype='float64'),np.zeros_like(unique_ids,dtype='float64'),np.zeros_like(unique_ids,dtype='float64')
-
-    # make arrays with values for v_ped,v_cm,v_ref, and gain for ADC to ke- conversion 
-    # FIXME: Can we make this without the for loop?
-    for i,ID in enumerate(unique_ids):
-        if mc_assn is None:
-            v_ped[i] = pedestal_dict[ID]['pedestal_mv']
-            v_cm[i] = config_dict[ID]['vcm_mv']
-            v_ref[i] = config_dict[ID]['vref_mv']
-        else:
-            v_ped[i] = v_pedestal_sim
-            v_cm[i] = v_cm_sim
-            v_ref[i] = v_ref_sim
-    
-    return v_ped, v_cm, v_ref

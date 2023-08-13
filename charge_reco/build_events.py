@@ -1,12 +1,81 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
-import json
 import time
 import consts
 from calibrate import *
-from preclustering import *
-import matplotlib.pyplot as plt
-import h5py
+
+def get_packet_unique_id(packets):
+    # unique id for each pixel, not to be confused with larnd-sim's pixel id
+    unique_ids = ((((packets['io_group'].astype(int)) * 256 \
+        + packets['io_channel'].astype(int)) * 256 \
+        + packets['chip_id'].astype(int)) * 64 \
+        + packets['channel_id'].astype(int)).astype(str)
+    return unique_ids
+
+def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, detprop, pedestal_dict, config_dict):
+    ## form zipped array using info from dictionary to use in clustering
+    ## calculates first relative packet coordinates in each module, then adjust by TPC offsets
+    ## some of this code copied from larnd-sim
+
+    TPC_OFFSETS = np.array(detprop['tpc_offsets'])*10
+    # Inverting x and z axes
+    TPC_OFFSETS[:, [2, 0]] = TPC_OFFSETS[:, [0, 2]]
+
+    module_to_io_groups = detprop['module_to_io_groups']
+    io_groups = packets['io_group']
+    io_groups_rel = np.copy(io_groups)
+    io_groups_rel[io_groups_rel % 2 == 1] = 1
+    io_groups_rel[io_groups_rel % 2 == 0] = 2
+    #keys = np.stack((io_group_rel, io_channel, chip_id, channel_id), axis=-1)
+
+    xyz_values = []
+    ts_inmm = []
+    v_ped, v_cm, v_ref, unique_ids = [], [], [], []
+    packets_keep_mask = np.zeros(len(packets), dtype=bool)
+    for i in range(len(packets['io_channel'])):
+        io_group = io_groups_rel[i]
+        io_channel = packets['io_channel'][i]
+        chip_id = packets['chip_id'][i]
+        channel_id = packets['channel_id'][i]
+        unique_id = get_packet_unique_id(packets[i])
+        
+        dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
+        if dict_values is not None:
+            if disabled_channel_IDs is not None and np.any(np.isin(disabled_channel_IDs, int(unique_id))):
+                pass # pass if packet is from channel that is in the disabled channels list
+            else:
+                xyz_values.append([dict_values[0], dict_values[1], dict_values[2], dict_values[3]])
+                ts_inmm.append(v_drift*1e1*ts[i]*0.1)
+                packets_keep_mask[i] = True
+                unique_ids.append(unique_id)
+                if mc_assn is None:
+                    v_ped.append(pedestal_dict[unique_id]['pedestal_mv'])
+                    v_cm.append(config_dict[unique_id]['vcm_mv'])
+                    v_ref.append(config_dict[unique_id]['vref_mv'])
+                else:
+                    v_ped.append(v_pedestal_sim)
+                    v_cm.append(v_cm_sim)
+                    v_ref.append(v_ref_sim)
+        #else:
+            #print(f'KeyError {(io_group, io_channel, chip_id, channel_id)}')
+    xyz_values = np.array(xyz_values)
+    ts_inmm = np.array(ts_inmm)
+    v_ped = np.array(v_ped)
+    v_cm = np.array(v_cm)
+    v_ref = np.array(v_ref)
+    unique_ids = np.array(unique_ids)
+    
+    # adjust coordinates by TPC offsets, if there's >1 module
+    io_group_grouped_by_module = list(module_to_io_groups.values())
+    for i in range(len(io_group_grouped_by_module)):
+        io_group_group = io_group_grouped_by_module[i]
+        if len(np.unique(io_groups)) > 2:
+            xyz_values[(io_groups == io_group_group[0]) | (io_groups == io_group_group[1])] += np.concatenate((TPC_OFFSETS[i], np.array([0])))
+        else:
+            pass
+    txyz = np.hstack((ts_inmm[:, np.newaxis], xyz_values))
+    
+    return txyz, packets_keep_mask, v_ped, v_cm, v_ref, unique_ids
 
 def cluster_packets(eps,min_samples,txyz):
     ### Cluster packets into charge events
@@ -34,7 +103,6 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     # Outputs:
     #   clusters: array of cluster data
     #   hits: array of hit-level data
-    labels = labels
     indices_sorted = np.argsort(labels)
     labels = labels[indices_sorted]
     txyz = txyz[indices_sorted]
@@ -122,15 +190,16 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     clusters['t0'] = np.ones(len(n_vals), dtype='i4')*-1
     return clusters, hits
 
-def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex, disabled_channel_IDs):
+def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
+             disabled_channel_IDs, detprop, pedestal_dict, config_dict):
     ## do charge reconstruction
     clusters = np.zeros((0,), dtype=consts.clusters_dtype)
     hits = np.zeros((0,), dtype=consts.hits_dtype)
-        
+    
     pkt_7_mask = packets['packet_type'] == 7
     pkt_4_mask = packets['packet_type'] == 4
     pkt_0_mask = packets['packet_type'] == 0
-    
+
     # grab the PPS timestamps of pkt type 7s and correct for PACMAN clock drift
     PPS_pt7 = PACMAN_drift(packets, module)[pkt_7_mask].astype('i8')*1e-1*1e3 # ns
     io_group_pt7 = packets[pkt_7_mask]['io_group']
@@ -141,16 +210,15 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex, disabled_ch
     unix_timestamps = np.interp(np.arange(len(unix_timestamps)), nonzero_indices, unix_timestamps[nonzero_indices])
     unix_pt7 = np.copy(unix_timestamps)[pkt_7_mask].astype('i8')
     unix = np.copy(unix_timestamps)[pkt_0_mask].astype('i8')
-    
+
     # match together external triggers corresponding to single light triggers
     threshold = 500
     differences = PPS_pt7[:, None] - PPS_pt7
     mask = np.abs(differences) < threshold
     mask = mask * np.tri(*mask.shape, k=-1)
     i, j = np.where(mask)
-    #pairs = [(PPS_pt7[x], PPS_pt7[y]) for x, y in zip(i, j)]
-    PPS_matched = []
-    unix_matched = [] # add eventually a module identifier
+    
+    PPS_matched, unix_matched = [], [] # add eventually a module identifier
     # loop through matched ext triggers and make single arrays for PPS and unix timestamps
     for x, y in zip(i,j):
         if unix_pt7[x] == unix_pt7[y]:
@@ -160,24 +228,24 @@ def analysis(packets,pixel_xy,mc_assn,tracks,module,hits_max_cindex, disabled_ch
     ext_trig = np.zeros((np.size(PPS_matched),), dtype=consts.ext_trig_dtype)
     ext_trig['unix'] = np.array(unix_matched).astype('i8')
     ext_trig['t'] = np.array(PPS_matched).astype('i8')
-    
+
     # apply a few PPS timestamp corrections, and select only data packets for analysis
     ts, packets, mc_assn, unix = timestamp_corrector(packets, mc_assn, unix, module)
-    
+
     # zip up x, y, z, and t values for clustering
-    txyz, packets_keep_mask = zip_pixel_tyz(packets, ts, pixel_xy, module, disabled_channel_IDs)
-    
+    txyz, packets_keep_mask, v_ped, v_cm, v_ref, unique_ids = zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, \
+                                        disabled_channel_IDs, detprop, pedestal_dict, config_dict)
+
     # remove packets with key errors
     packets = packets[packets_keep_mask]
     unix = unix[packets_keep_mask]
     
     if mc_assn is not None:
         mc_assn = mc_assn[packets_keep_mask]
-        
-    v_ped, v_cm, v_ref, unique_ids = calibrations(packets, mc_assn, module)
+
     db = cluster_packets(eps, min_samples, txyz[:,0:4])
     labels = np.array(db.labels_)
-    
+
     dataword = np.copy(packets['dataword'])
     io_group = np.copy(packets['io_group'])
     
