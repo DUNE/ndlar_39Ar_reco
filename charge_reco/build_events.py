@@ -97,7 +97,7 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
         else:
             pass
     
-    #txyz = np.hstack((ts_inmm[:, np.newaxis], xyz_values))
+    txyz = np.hstack((ts_inmm[:, np.newaxis], xyz_values))
     return txyz, packets_keep_mask, v_ped, v_cm, v_ref, unique_ids
     #return txyz, packets_keep_mask, v_calib[:,0], v_calib[:,1], v_calib[:,2], unique_ids
 
