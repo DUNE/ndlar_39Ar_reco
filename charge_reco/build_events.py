@@ -156,7 +156,7 @@ def find_charge_clusters(labels,dataword,txyz,v_ref,v_cm,v_ped,unix,io_group,uni
     hits['x'] = txyz[:,1]
     hits['y'] = txyz[:,2]
     hits['z_anode'] = txyz[:,3]
-    hits['z_drift'] = txyz[:,3]
+    hits['z_drift'] = txyz[:,4]
     hits['unique_id'] = unique_ids
     hits['unix'] = unix
     hits['cluster_index'] = labels + hits_size
