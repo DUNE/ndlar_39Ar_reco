@@ -95,6 +95,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
     upper_PPS_window = module.charge_light_matching_upper_PPS_window
     unix_window = module.charge_light_matching_unix_window
     z_drift_factor = 10*consts.v_drift/1e3
+    dbscan = DBSCAN(min_samples=min_samples, eps=eps)
     
     for i in tqdm(range(batches_limit), desc = ' Processing batches...'):
         batch_start_time = time.time()
@@ -106,7 +107,7 @@ def run_reconstruction(input_config_filename, input_filepath=None, output_filepa
         analysis_start_time = time.time()
         results = \
             analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex, disabled_channel_IDs, \
-                     detprop, pedestal_dict, config_dict)
+                     detprop, pedestal_dict, config_dict, dbscan)
         if consts.save_hits:
             clusters, ext_trig, hits, benchmarks = results
         else:

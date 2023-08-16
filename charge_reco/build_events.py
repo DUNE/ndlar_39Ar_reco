@@ -83,11 +83,13 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
     #return txyz, packets_keep_mask, v_calib[:,0], v_calib[:,1], v_calib[:,2], unique_ids
 
 def cluster_packets(eps,min_samples,txyz):
+#def cluster_packets(dbscan, txyz):
     ### Cluster packets into charge events
     # INPUT: DBSCAN parameters (eps: mm; min_samples: int), packet txyz list
     # OUTPUT: DBSCAN fit db.
     db = DBSCAN(eps=eps, min_samples=min_samples).fit(txyz) 
     return db
+    #return dbscan.fit_predict(txyz)
 
 def getEventIDs(txyz, mc_assn, tracks, event_ids):
     for i in range(len(txyz)):
@@ -187,7 +189,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
         return clusters
 
 def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
-             disabled_channel_IDs, detprop, pedestal_dict, config_dict):
+             disabled_channel_IDs, detprop, pedestal_dict, config_dict, dbscan):
     ## do charge reconstruction
     clusters = np.zeros((0,), dtype=consts.clusters_dtype)
     hits = np.zeros((0,), dtype=consts.hits_dtype)
@@ -251,6 +253,7 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
 
     start = time.time()
     db = cluster_packets(eps, min_samples, txyz[:,0:4])
+    #labels = cluster_packets(dbscan, txyz[:,0:4])
     dbscan_time = time.time() - start
     
     labels = np.array(db.labels_)
