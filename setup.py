@@ -2,7 +2,7 @@
 
 VER = "0.2.1-alpha"
 
-reqs = ["numpy","adc64format", "tqdm", "sklearn", "collections", "json", "time", "fire", "matplotlib", "pickle", "scipy", "h5py","os", "importlib"]
+reqs = ["fire", "h5py", "numpy", "scikit-learn", "tqdm", "scipy", "PyYAML"]
 
 import setuptools
 
@@ -23,5 +23,5 @@ setuptools.setup(
         "Programming Language :: Python",
         "Topic :: Scientific/Engineering :: Physics"
     ],
-    python_requires='>=3.7',
+    python_requires='>=3.6.8',
 )
