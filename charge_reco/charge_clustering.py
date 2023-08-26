@@ -8,7 +8,6 @@ import fire
 import time
 import os
 from tqdm import tqdm
-#import importlib.util
 from math import ceil
 import consts
 import loading
@@ -48,7 +47,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
         else:
             pass
     # detector dictionary file must be pkl file made with larpix_readout_parser
-    pixel_xy = loading.load_geom_dict(module.detector_dict_path)
+    pixel_xy = loading.load_geom_dict(module)
     pedestal_dict, config_dict = loading.load_pedestal_and_config(module)
     detprop = loading.load_detector_properties(module)
     disabled_channel_IDs = loading.load_disabled_channels_list(module)
