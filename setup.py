@@ -2,7 +2,7 @@
 
 VER = "0.2.1-alpha"
 
-reqs = ["fire", "h5py", "numpy", "scikit-learn", "tqdm", "scipy", "PyYAML"]
+reqs = ["fire", "h5py", "numpy", "scikit-learn", "tqdm", "PyYAML"]
 
 import setuptools
 
