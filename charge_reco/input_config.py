@@ -9,7 +9,7 @@ class ModuleConfig:
         if self.module_name == 'module-0':
             self.detector = 'module-0'
             self.data_type = 'data'
-            self.detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.pkl'
+            self.detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
             self.use_disabled_channels_list = True
             self.disabled_channels_list = 'disabled_channels/module0_disabled_channels_noise_cut.npz'
@@ -24,7 +24,6 @@ class ModuleConfig:
             self.batches_limit = 400
             self.ext_trig_matching_tolerance_unix = 1
             self.ext_trig_matching_tolerance_PPS = 1.5e3 # ns
-            self.full_drift_time = int(drift_distance / v_drift * 1e3)
             self.charge_light_matching_lower_PPS_window = 61000
             self.charge_light_matching_upper_PPS_window = full_drift_time + 61000
             self.charge_light_matching_unix_window = 0
@@ -34,8 +33,8 @@ class ModuleConfig:
         elif self.module_name == 'module-1':
             self.detector = 'module-1'
             self.data_type = 'data'
-            self.detector_dict_path = 'layout/module1_layout-2.3.16.pkl'
-            self.detprop_path = 'detector_properties/module1.yaml'
+            self.detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.yaml'
+            self.detprop_path = 'detector_properties/module0.yaml'
             self.use_disabled_channels_list = True
             self.disabled_channels_list = 'disabled_channels/module1_disabled_channels_noise_cut.npz'
             self.pedestal_file = 'pedestal/module1_packet_2022_02_08_01_40_31_CETevd_ped.json'
