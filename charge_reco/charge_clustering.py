@@ -8,36 +8,24 @@ import fire
 import time
 import os
 from tqdm import tqdm
-import importlib.util
+#import importlib.util
 from math import ceil
 import consts
 import loading
+from input_config import ModuleConfig
 
-def run_reconstruction(input_config_filename, input_filepath=None, output_filepath=None):
+def run_reconstruction(input_config_name, input_filepath, output_filepath):
     ## main function
     
-    # Import input variables file. Get variables with module.<variable>
-    input_config_filepath = 'input_config/' + input_config_filename
-    module_name = "detector_module"
-    spec = importlib.util.spec_from_file_location(module_name, input_config_filepath)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Get input variables. Get variables with module.<variable>
+    module = ModuleConfig(input_config_name)
     
-    # set some variables from config file
     detector = module.detector
     data_type = module.data_type
     match_charge_to_ext_trig = True
     
-    if input_filepath is not None:
-        input_packets_filename = input_filepath
-    else:
-        input_packets_filename = module.input_packets_filename
-
-    if output_filepath is not None:
-        output_events_filename = output_filepath
-    else:
-        output_events_filename = module.output_events_filename
-    
+    input_packets_filename = input_filepath
+    output_events_filename = output_filepath
     # do various file / parameter checks
     if os.path.exists(output_events_filename):
         raise Exception('Output file '+ str(output_events_filename) + ' already exists.')
