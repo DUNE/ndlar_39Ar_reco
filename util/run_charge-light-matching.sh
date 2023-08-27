@@ -10,7 +10,7 @@ else
 	exit 0
 fi
 
-INFILENAME_CLUSTERS=${OUTDIR}/packet_2022_02_08_01_47_59_CET_clusters.h5
+INFILENAME_CLUSTERS=${OUTDIR}/clusters_selection_2022_02_08_01_47_59_CET.h5
 INFILENAME_LIGHT=${OUTDIR}/0cd913fb_0cd93db0_20220208_014759_timestamp_corrected.h5
 OUTFILENAME=${OUTDIR}/charge-light-matched-clusters_2022_02_08_01_47_59_CET.h5
 
