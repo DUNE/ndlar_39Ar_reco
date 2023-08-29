@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-VER = "1.0.0-alpha"
+VER = "1.1.0-alpha"
 
 reqs = ["fire", "h5py", "numpy", "scikit-learn", "tqdm", "PyYAML"]
 
