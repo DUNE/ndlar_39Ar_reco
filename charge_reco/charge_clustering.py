@@ -152,8 +152,9 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
                     f['hits'].resize((f['hits'].shape[0] + hits.shape[0]), axis=0)
                     f['hits'][-hits.shape[0]:] = hits
                     hits_max_cindex = np.max(hits['cluster_index'])+1
-                f['ext_trig'].resize((f['ext_trig'].shape[0] + ext_trig.shape[0]), axis=0)
-                f['ext_trig'][-ext_trig.shape[0]:] = ext_trig
+                if len(ext_trig) > 0:
+                    f['ext_trig'].resize((f['ext_trig'].shape[0] + ext_trig.shape[0]), axis=0)
+                    f['ext_trig'][-ext_trig.shape[0]:] = ext_trig
                 
         index_start += batch_size
         index_end += batch_size
