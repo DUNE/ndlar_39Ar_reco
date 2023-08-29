@@ -81,6 +81,20 @@ chmod +x run_flow_light_reco.sh
 
 Be wary that the output file contains waveforms and thus is a very large file, so make sure to put it somewhere appropriate for the file size (one module-1 file was ~90 GB!). However, the charge-light matching will produce a much more lightweight file.
 
+To make selections on data using external triggers:
+```bash
+python3 charge_cluster_selections.py <input clusters h5 file> <output clusters selection h5 file>
+```
+This will produce a new file selecting only clusters with matched external triggers that have less than `x` hits per cluster and less than `N` clusters per matching window. 
+
+To run matching between external triggers and light events (thus charge to light matching):
+```bash
+python3 match_light_to_ext_triggers.py <input clusters selection file> <light events flow h5 file> <new output h5 file>
+```
+This will produce an h5 file with clusters and light events, with associations between the two via `ext_trig_index` parameter which has the index of the associated light event in the light dataset.
+
+There are bash scripts in the `util` folder for running each step on NERSC Perlmutter.
+
 ### Analysis examples
 To access the datasets in python:
 ```python
@@ -92,10 +106,5 @@ clusters = np.array(f['clusters'])
 hits = np.array(f['hits'])
 ext_trig = np.array(f['ext_trig'])
 ```
-To find small clusters (e.g. radiologicals):
-```python
-nhit_cut = 10
-cluster_nhit = np.array(clusters['nhit'])
-small_clusters = clusters[cluster_nhit <= nhit_cut]
-```
+
 You can find more analysis examples and information pertaining to radiological simulation [here](https://github.com/sam-fogarty/ndlar_39Ar_analysis).
