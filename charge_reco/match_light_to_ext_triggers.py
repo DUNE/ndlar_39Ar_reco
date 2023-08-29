@@ -36,10 +36,11 @@ def main(input_clusters_file, input_light_file, output_filename):
     tai_ns_mask = np.zeros(len(ext_trig_unix), dtype=bool)
     light_events_matched = np.zeros((0,), dtype=light_events.dtype)
    
-    num_light_events = 2500 # len(light_events)
+    num_light_events = len(light_events) # len(light_events)
     light_events_matched = []
     light_index = 0
     light_event_indices = np.zeros(len(clusters))
+    
     # match between external triggers and light triggers
     for i in tqdm(range(num_light_events), desc=' Matching external triggers to light events: '):
         light_unix_s = int(np.unique(light_events[i]['utime_ms']*1e-3)[1])
@@ -60,6 +61,7 @@ def main(input_clusters_file, input_light_file, output_filename):
                         = light_index
             light_index += 1
     light_events_matched = np.array(light_events_matched, dtype=light_events.dtype)
+    
     # get matched clusters
     ext_trig_mask = unix_mask & tai_ns_mask
     total_matches = np.sum(ext_trig_mask)
@@ -85,5 +87,6 @@ def main(input_clusters_file, input_light_file, output_filename):
         output_file.create_dataset('clusters', data=clusters_matched)
         output_file.create_dataset('light_events', data=light_events_matched)
     print(f'Saved output to {output_filename}')
+    
 if __name__ == "__main__":
     fire.Fire(main)
