@@ -89,11 +89,11 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
         
         packets_batch = np.array(packets[index_start:index_end])
         if mc_assn is not None:
-            mc_assn = np.array(mc_assn[index_start:index_end])
+            mc_assn_batch = np.array(mc_assn[index_start:index_end])
         
         analysis_start_time = time.time()
         results = \
-            analysis(packets_batch, pixel_xy, mc_assn, tracks, module, hits_max_cindex, disabled_channel_IDs, \
+            analysis(packets_batch, pixel_xy, mc_assn_batch, tracks, module, hits_max_cindex, disabled_channel_IDs, \
                      detprop, pedestal_dict, config_dict, dbscan)
         if consts.save_hits:
             clusters, ext_trig, hits, benchmarks = results
