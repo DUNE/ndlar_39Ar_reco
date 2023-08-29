@@ -57,6 +57,30 @@ The code requires various inputs, most of which are specified in the input confi
 - `layout` folder: detector-specific pixel layout yamls
 - `pedestal` folder: contains `json` files with channel-by-channel pixel pedestal values
 
+### Light Reconstruction
+The light data reconstruction is done with `ndlar_flow`: https://github.com/DUNE/ndlar_flow/tree/main 
+
+In the `util` folder, there are scripts for running `ndlar_flow` for processing the light data. `ndlar_flow` uses yamls to control the steps to use in reconstruction. `light_event_reconstruction_for_39Ar.yaml` contains light waveform processing steps (e.g. waveform noise filtering, waveform deconvolution, waveform aligning, etc) not including hit finding (the plan is to do hit-finding here). 
+
+To set up `ndlar_flow`:
+```bash
+chmod +x setup_h5flow_ndlar_flow.sh
+./setup_h5flow_ndlar_flow.sh
+```
+
+This will create directories of `h5flow` and `ndlar_flow` and it will make an environment that can be activated with:
+```bash
+source flow.venv/bin/activate
+```
+
+To run the light data reconstruction:
+```bash
+chmod +x run_flow_light_reco.sh
+./run_flow_light_reco.sh
+```
+
+Be wary that the output file contains waveforms and thus is a very large file, so make sure to put it somewhere appropriate for the file size (one module-1 file was ~90 GB!). However, the charge-light matching will produce a much more lightweight file.
+
 ### Analysis examples
 To access the datasets in python:
 ```python
