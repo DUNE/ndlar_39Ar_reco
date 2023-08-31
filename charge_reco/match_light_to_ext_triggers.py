@@ -34,6 +34,7 @@ def main(input_clusters_file, input_light_file, output_filename):
     ts_window = 1600 # nsec
     unix_mask = np.zeros(len(ext_trig_unix), dtype=bool)
     tai_ns_mask = np.zeros(len(ext_trig_unix), dtype=bool)
+    isMatch_mask = np.zeros(len(ext_trig_unix), dtype=bool)
     light_events_matched = np.zeros((0,), dtype=light_events.dtype)
    
     num_light_events = len(light_events) # len(light_events)
@@ -51,7 +52,7 @@ def main(input_clusters_file, input_light_file, output_filename):
         unix_mask += isUnixMatch
         tai_ns_mask += isPPSMatch
         isMatch = isUnixMatch & isPPSMatch
-        
+        isMatch_mask += isMatch
         # keep only matched light events, and keep track of indices for associations
         if np.sum(isMatch) == 1:
             light_events_matched.append(light_events[i])
@@ -61,13 +62,17 @@ def main(input_clusters_file, input_light_file, output_filename):
                         = light_index
             light_index += 1
     light_events_matched = np.array(light_events_matched, dtype=light_events.dtype)
-    
+    print(f'light_event_indices: {np.unique(light_event_indices)}')
     # get matched clusters
-    ext_trig_mask = unix_mask & tai_ns_mask
+    ext_trig_mask = isMatch_mask
     total_matches = np.sum(ext_trig_mask)
-    print(f'Efficiency of ext trigger matches = {total_matches/num_light_events}')
+    print(f'Efficiency of light event matches = {total_matches/num_light_events}')
     print(f'Efficiency of unix matches = {np.sum(unix_mask)/num_light_events}')
     print(f'Efficiency of PPS matches = {np.sum(tai_ns_mask)/num_light_events}')
+    print(' ')
+    print(f'Efficiency of matching between ext triggers and light events = {total_matches/len(ext_trig_mask)}')
+    print(f'Efficiency of unix matches = {np.sum(unix_mask)/len(ext_trig_mask)}')
+    print(f'Efficiency of PPS matches = {np.sum(tai_ns_mask)/len(ext_trig_mask)}')
 
     ext_trig_indices_matched = np.where(ext_trig_mask)[0]
     clusters_matched_mask = np.isin(ext_trig_indices, ext_trig_indices_matched)
