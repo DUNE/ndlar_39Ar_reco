@@ -7,9 +7,13 @@ import numpy as np
 import h5py
 import fire
 from tqdm import tqdm
+import os
 
 def main(input_filename, output_filename):
     ## Make selections on the charge cluster data using external triggers and
+    
+    if os.path.exists(output_filename):
+        raise Exception('Output file '+ str(output_filename) + ' already exists.')
     ## output a new file for downstream charge-light matching.
     f = h5py.File(input_filename, 'r')
     clusters = np.array(f['clusters'])
@@ -37,6 +41,8 @@ def main(input_filename, output_filename):
     clusters_keep = []
     ext_trig_keep = []
     print('Total groups = ', len(grouped_clusters))
+    new_ext_trig_index = 0
+    new_ext_trig_indices = []
     for i in tqdm(range(len(grouped_clusters)), desc=' Finding events according to criteria: '):
         group = grouped_clusters[i]
         unique_ext_trig_indices = np.unique(group['ext_trig_index'])
@@ -50,15 +56,16 @@ def main(input_filename, output_filename):
             numEvents += 1
             for cluster in group:
                 clusters_keep.append(cluster)
+                new_ext_trig_indices.append(new_ext_trig_index)
             ext_trig_keep.append(ext_trig[unique_ext_trig_indices[0]])
-            
-        if not uniqueExtTrigs:
-            numEvents_nonUniqueMatch += 1
-    
+            new_ext_trig_index += 1
+             
+    new_ext_trig_indices = np.array(new_ext_trig_indices)
     clusters = np.array(clusters_keep)
     ext_trig = np.array(ext_trig_keep)
+    clusters['ext_trig_index'] = new_ext_trig_indices
+    
     print(f'Number of events satifying criteria = {numEvents}; {numEvents/len(grouped_clusters)} fraction of total events.')
-    print(f'Number of events with multi-matched clusters = {numEvents_nonUniqueMatch}; {numEvents_nonUniqueMatch/len(grouped_clusters)} fraction of total events.')
     print(f'Total events in file = {len(grouped_clusters)}')
     
     with h5py.File(output_filename, 'a') as output_file:
