@@ -37,10 +37,10 @@ def main(input_clusters_file, input_light_file, output_filename):
     isMatch_mask = np.zeros(len(ext_trig_unix), dtype=bool)
     light_events_matched = np.zeros((0,), dtype=light_events.dtype)
    
-    num_light_events = len(light_events) # len(light_events)
+    num_light_events = int(len(light_events)/2) # len(light_events)
     light_events_matched = []
     light_index = 0
-    light_event_indices = np.zeros(len(clusters))
+    light_event_indices = np.zeros(len(clusters), dtype='i8')
     
     # match between external triggers and light triggers
     for i in tqdm(range(num_light_events), desc=' Matching external triggers to light events: '):
@@ -56,13 +56,10 @@ def main(input_clusters_file, input_light_file, output_filename):
         # keep only matched light events, and keep track of indices for associations
         if np.sum(isMatch) == 1:
             light_events_matched.append(light_events[i])
-            #light_events_matched = np.concatenate((light_events_matched, np.array(light_events[i], dtype=light_events.dtype)))
             ext_trig_index = np.where(isMatch)[0]
-            light_event_indices[clusters['ext_trig_index'] == ext_trig_index] \
-                        = light_index
+            np.put(light_event_indices, np.where(clusters['ext_trig_index'] == ext_trig_index)[0], light_index)
             light_index += 1
     light_events_matched = np.array(light_events_matched, dtype=light_events.dtype)
-    print(f'light_event_indices: {np.unique(light_event_indices)}')
     # get matched clusters
     ext_trig_mask = isMatch_mask
     total_matches = np.sum(ext_trig_mask)
@@ -78,7 +75,7 @@ def main(input_clusters_file, input_light_file, output_filename):
     clusters_matched_mask = np.isin(ext_trig_indices, ext_trig_indices_matched)
     clusters_matched = clusters[clusters_matched_mask]
     light_event_indices = light_event_indices[clusters_matched_mask]
-    
+    print(f'light_event_indices after mask: {np.unique(light_event_indices)}')
     # replace ext_trig_index with light event indices
     clusters_new = np.zeros_like(clusters_matched)
     for name in clusters_matched.dtype.names:
