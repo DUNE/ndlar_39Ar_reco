@@ -30,15 +30,16 @@ def main(input_clusters_file, input_light_file, output_filename):
     # get light events
     f_light = h5py.File(input_light_file, 'r')
     light_events = f_light['light/events/data']
-
+    light_wvfms = f_light['light/wvfm/data']
+    
     ts_window = 1600 # nsec
     unix_mask = np.zeros(len(ext_trig_unix), dtype=bool)
     tai_ns_mask = np.zeros(len(ext_trig_unix), dtype=bool)
     isMatch_mask = np.zeros(len(ext_trig_unix), dtype=bool)
-    light_events_matched = np.zeros((0,), dtype=light_events.dtype)
-   
+
     num_light_events = int(len(light_events)/2) # len(light_events)
     light_events_matched = []
+    light_wvfms_matched = []
     light_index = 0
     light_event_indices = np.zeros(len(clusters), dtype='i8')
     
@@ -56,10 +57,13 @@ def main(input_clusters_file, input_light_file, output_filename):
         # keep only matched light events, and keep track of indices for associations
         if np.sum(isMatch) == 1:
             light_events_matched.append(light_events[i])
+            light_wvfms_matched.append(light_wvfms[i])
             ext_trig_index = np.where(isMatch)[0]
             np.put(light_event_indices, np.where(clusters['ext_trig_index'] == ext_trig_index)[0], light_index)
             light_index += 1
+    
     light_events_matched = np.array(light_events_matched, dtype=light_events.dtype)
+    light_wvfms_matched = np.array(light_wvfms_matched, dtype=light_wvfms.dtype)
     # get matched clusters
     ext_trig_mask = isMatch_mask
     total_matches = np.sum(ext_trig_mask)
@@ -88,6 +92,7 @@ def main(input_clusters_file, input_light_file, output_filename):
     with h5py.File(output_filename, 'a') as output_file:
         output_file.create_dataset('clusters', data=clusters_matched)
         output_file.create_dataset('light_events', data=light_events_matched)
+        output_file.create_dataset('light_wvfms', data=light_wvfms_matched)
     print(f'Saved output to {output_filename}')
     
 if __name__ == "__main__":
