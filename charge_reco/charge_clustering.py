@@ -72,7 +72,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
     nBatches = module.nBatches
     batches_limit = module.batches_limit
     # run reconstruction
-    hits_max_cindex = 0
+    max_cluster_index = 0
     ext_trig_max_index = 0
     batch_size = ceil(len(packets)/nBatches)
     index_start = 0
@@ -90,10 +90,12 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
         packets_batch = np.array(packets[index_start:index_end])
         if mc_assn is not None:
             mc_assn_batch = np.array(mc_assn[index_start:index_end])
+        else:
+            mc_assn_batch = None
         
         analysis_start_time = time.time()
         results = \
-            analysis(packets_batch, pixel_xy, mc_assn_batch, tracks, module, hits_max_cindex, disabled_channel_IDs, \
+            analysis(packets_batch, pixel_xy, mc_assn_batch, tracks, module, max_cluster_index, disabled_channel_IDs, \
                      detprop, pedestal_dict, config_dict, dbscan)
         if consts.save_hits:
             clusters, ext_trig, hits, benchmarks = results
@@ -118,7 +120,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
                 # loop through hits in clusters to calculate drift position
                 for cluster_index in matched_clusters_indices:
                     if consts.save_hits:
-                        hits_this_cluster_mask = hits['cluster_index'] == cluster_index + hits_max_cindex
+                        hits_this_cluster_mask = hits['cluster_index'] == cluster_index + max_cluster_index
                         hits_this_cluster = np.copy(hits[hits_this_cluster_mask])
                         z_drift_shift = hits_this_cluster['z_drift']*(hits_this_cluster['t'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
                         z_drift = hits_this_cluster['z_anode'] + z_drift_shift
@@ -138,20 +140,20 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
             # create the hdf5 datasets with initial results
             with h5py.File(output_events_filename, 'a') as output_file:
                 output_file.create_dataset('clusters', data=clusters, maxshape=(None,))
+                # making sure to continously increment cluster_index as we go onto the next batch
+                max_cluster_index += len(clusters)-1
                 if consts.save_hits:
                     output_file.create_dataset('hits', data=hits, maxshape=(None,))
-                    # making sure to continously increment cluster_index as we go onto the next batch
-                    hits_max_cindex = np.max(hits['cluster_index'])+1 
                 output_file.create_dataset('ext_trig', data=ext_trig, maxshape=(None,))
         else:
             # add new results to hdf5 file
             with h5py.File(output_events_filename, 'a') as f:
                 f['clusters'].resize((f['clusters'].shape[0] + clusters.shape[0]), axis=0)
                 f['clusters'][-clusters.shape[0]:] = clusters
+                max_cluster_index += len(clusters)-1
                 if consts.save_hits:
                     f['hits'].resize((f['hits'].shape[0] + hits.shape[0]), axis=0)
                     f['hits'][-hits.shape[0]:] = hits
-                    hits_max_cindex = np.max(hits['cluster_index'])+1
                 if len(ext_trig) > 0:
                     f['ext_trig'].resize((f['ext_trig'].shape[0] + ext_trig.shape[0]), axis=0)
                     f['ext_trig'][-ext_trig.shape[0]:] = ext_trig

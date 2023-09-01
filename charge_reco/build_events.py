@@ -99,7 +99,7 @@ def getEventIDs(txyz, mc_assn, tracks, event_ids):
         event_ids[i] = event_id
 
 def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
-                                      hits_size, mc_assn, tracks):
+                                      max_cluster_index, mc_assn, tracks):
     ### Make hits and clusters datasets from DBSCAN clusters and corresponding hits
     # Inputs: 
     #   labels: list of labels from DBSCAN
@@ -137,7 +137,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
         hits['z_drift'] = txyz[:,4]
         hits['unique_id'] = unique_ids
         hits['unix'] = unix
-        hits['cluster_index'] = labels + hits_size
+        hits['cluster_index'] = labels + max_cluster_index
         hits['event_id'] = event_ids
         
     label_indices = np.concatenate(([0], np.flatnonzero(labels[:-1] != labels[1:])+1, [len(labels)]))[1:-1]
@@ -165,6 +165,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
     z_direction = np.array(list(map(min, label_direction)))
     
     clusters = np.zeros((len(n_vals),), dtype=consts.clusters_dtype)
+    clusters['id'] = np.arange(0, len(n_vals), 1, dtype='i4') + max_cluster_index
     clusters['nhit'] = n_vals
     clusters['q'] = q_vals
     clusters['unix'] = (unix_vals/n_vals).astype('i8') # all of these hits should have the same unix anyway
@@ -188,7 +189,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
     else:
         return clusters
 
-def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
+def analysis(packets, pixel_xy, mc_assn, tracks, module, max_cluster_index, \
              disabled_channel_IDs, detprop, pedestal_dict, config_dict, dbscan):
     ## do charge reconstruction
     clusters = np.zeros((0,), dtype=consts.clusters_dtype)
@@ -265,7 +266,7 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, hits_max_cindex, \
             charge=charge,\
             unix=unix, io_group=io_group,\
             unique_ids=unique_ids,\
-            hits_size=hits_max_cindex,\
+            max_cluster_index=max_cluster_index,\
             mc_assn=mc_assn, tracks=tracks)
         if consts.save_hits:
             clusters = results[0]
