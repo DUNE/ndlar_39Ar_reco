@@ -24,8 +24,8 @@ class ModuleConfig:
             self.batches_limit = 400
             self.ext_trig_matching_tolerance_unix = 1
             self.ext_trig_matching_tolerance_PPS = 1.5e3 # ns
-            self.charge_light_matching_lower_PPS_window = 61000
-            self.charge_light_matching_upper_PPS_window = full_drift_time + 61000
+            self.charge_light_matching_lower_PPS_window = 150000
+            self.charge_light_matching_upper_PPS_window = full_drift_time + 150000
             self.charge_light_matching_unix_window = 0
             self.ext_trig_PPS_window = 1000
 
@@ -47,8 +47,8 @@ class ModuleConfig:
             self.batches_limit = 10
             self.ext_trig_matching_tolerance_unix = 1
             self.ext_trig_matching_tolerance_PPS = 1.5e3 # ns
-            self.charge_light_matching_lower_PPS_window = 61000
-            self.charge_light_matching_upper_PPS_window = full_drift_time + 61000
+            self.charge_light_matching_lower_PPS_window = 150000
+            self.charge_light_matching_upper_PPS_window = full_drift_time + 150000
             self.charge_light_matching_unix_window = 0
             self.ext_trig_PPS_window = 1000
 
@@ -56,9 +56,9 @@ class ModuleConfig:
         elif self.module_name == 'module-1':
             self.detector = 'module-1'
             self.data_type = 'data'
-            self.detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.yaml'
+            self.detector_dict_path = 'layout/module1_multi_tile_layout-2.3.16.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
-            self.use_disabled_channels_list = True
+            self.use_disabled_channels_list = False
             self.disabled_channels_list = 'disabled_channels/module1_disabled_channels_noise_cut.npz'
             self.pedestal_file = 'pedestal/module1_packet_2022_02_08_01_40_31_CETevd_ped.json'
             self.config_file = 'config/module1_config_22-02-08_13-37-39.json'
@@ -70,9 +70,9 @@ class ModuleConfig:
             self.nBatches = 400
             self.batches_limit = 400
             self.ext_trig_matching_tolerance_unix = 1
-            self.ext_trig_matching_tolerance_PPS = 1.5e3 # ns
-            self.charge_light_matching_lower_PPS_window = 61000
-            self.charge_light_matching_upper_PPS_window = full_drift_time + 61000
+            self.ext_trig_matching_tolerance_PPS = 2.0e3 # ns
+            self.charge_light_matching_lower_PPS_window = 150000
+            self.charge_light_matching_upper_PPS_window = full_drift_time + 150000
             self.charge_light_matching_unix_window = 0
             self.ext_trig_PPS_window = 1000
 
