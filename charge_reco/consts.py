@@ -37,4 +37,3 @@ ext_trig_dtype = np.dtype([('unix', '<i8'), ('t', '<i8')])
 
 EVENT_SEPARATOR='event_id'
 time_the_reconstruction = False
-save_hits = False
