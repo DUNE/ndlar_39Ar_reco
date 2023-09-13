@@ -63,8 +63,8 @@ class ModuleConfig:
             self.pedestal_file = 'pedestal/module1_packet_2022_02_08_01_40_31_CETevd_ped.json'
             self.config_file = 'config/module1_config_22-02-08_13-37-39.json'
             self.use_ped_config_files = True
-            self.PACMAN_clock_correction1 = [0., -2.5825e-07]
-            self.PACMAN_clock_correction2 = [0., 4.0650e-07]
+            self.PACMAN_clock_correction1 = [0., 0.]
+            self.PACMAN_clock_correction2 = [0., 0.]
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
             self.nBatches = 400
