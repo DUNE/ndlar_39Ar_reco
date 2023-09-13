@@ -32,12 +32,13 @@ def main(input_clusters_file, input_light_file, output_filename):
     light_events = f_light['light/events/data']
     light_wvfms = f_light['light/wvfm/data']
     
-    ts_window = 1600 # nsec
+    ts_window = 2000 # nsec
     unix_mask = np.zeros(len(ext_trig_unix), dtype=bool)
     tai_ns_mask = np.zeros(len(ext_trig_unix), dtype=bool)
     isMatch_mask = np.zeros(len(ext_trig_unix), dtype=bool)
 
     num_light_events = int(len(light_events)/2) # len(light_events)
+    #num_light_events = 10000
     light_events_matched = []
     light_wvfms_matched = []
     light_index = 0
@@ -46,7 +47,7 @@ def main(input_clusters_file, input_light_file, output_filename):
     # match between external triggers and light triggers
     for i in tqdm(range(num_light_events), desc=' Matching external triggers to light events: '):
         light_unix_s = int(np.unique(light_events[i]['utime_ms']*1e-3)[1])
-        light_tai_ns = int((np.unique(light_events[i]['tai_ns'])[1]/0.625) % 1e9)
+        light_tai_ns = int((np.unique(light_events[i]['tai_ns'])[1]) % 1e9)
         isUnixMatch = ext_trig_unix == light_unix_s
         isPPSMatch = (ext_trig_t > light_tai_ns - ts_window) & \
             (ext_trig_t < light_tai_ns + ts_window)
