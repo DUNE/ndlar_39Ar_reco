@@ -18,7 +18,7 @@ def main(input_filename, output_filename):
     f = h5py.File(input_filename, 'r')
     clusters = np.array(f['clusters'])
     ext_trig = f['ext_trig']
-    
+
     max_hits = 10 # maximum hits per cluster
     max_clusters = 5 # maximum clusters per event
     
