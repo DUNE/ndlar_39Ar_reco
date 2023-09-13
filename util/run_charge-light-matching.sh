@@ -10,9 +10,10 @@ else
 	exit 0
 fi
 
-INFILENAME_CLUSTERS=${OUTDIR}/clusters_selection_2022_02_08_01_47_59_CET.h5
-INFILENAME_LIGHT=${OUTDIR}/0cd913fb_0cd93db0_20220208_014759_timestamp_corrected.h5
-OUTFILENAME=${OUTDIR}/charge-light-matched-clusters_2022_02_08_01_47_59_CET.h5
+#INFILENAME_CLUSTERS=${OUTDIR}/clusters_selection_2022_02_08_01_47_59_CET.h5
+INFILENAME_CLUSTERS=${OUTDIR}/clusters_selection_2022_02_09_01_57_26_CET.h5
+INFILENAME_LIGHT=${OUTDIR}/light_events_0cd913fb_0cd93db0_20220209_015727.h5
+OUTFILENAME=${OUTDIR}/charge-light-matched-clusters_2022_02_09_01_57_26_CET.h5
 
 shifter --image=mjkramer/sim2x2:genie_edep.3_04_00.20230620 --module=None -- /bin/bash << EOF
 set +o posix

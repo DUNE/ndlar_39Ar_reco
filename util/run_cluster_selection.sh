@@ -10,8 +10,8 @@ else
 	exit 0
 fi
 
-INFILENAME_CLUSTERS=${OUTDIR}/packet_2022_02_08_01_47_59_CET_clusters.h5
-OUTFILENAME=${OUTDIR}/clusters_selection_2022_02_08_01_47_59_CET.h5
+INFILENAME_CLUSTERS=${OUTDIR}/packet_2022_02_09_01_57_26_CET_clusters.h5
+OUTFILENAME=${OUTDIR}/clusters_selection_2022_02_09_01_57_26_CET.h5
 
 shifter --image=mjkramer/sim2x2:genie_edep.3_04_00.20230620 --module=None -- /bin/bash << EOF
 set +o posix
