@@ -13,9 +13,12 @@ import consts
 import loading
 from input_config import ModuleConfig
 
-def run_reconstruction(input_config_name, input_filepath, output_filepath):
+def run_reconstruction(input_config_name, input_filepath, output_filepath, save_hits=0):
     ## main function
-    
+    if save_hits:
+        save_hits = True
+    else:
+        save_hits = False
     # Get input variables. Get variables with module.<variable>
     module = ModuleConfig(input_config_name)
     
@@ -96,8 +99,8 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
         analysis_start_time = time.time()
         results = \
             analysis(packets_batch, pixel_xy, mc_assn_batch, tracks, module, max_cluster_index, disabled_channel_IDs, \
-                     detprop, pedestal_dict, config_dict, dbscan)
-        if consts.save_hits:
+                     detprop, pedestal_dict, config_dict, dbscan, save_hits)
+        if save_hits:
             clusters, ext_trig, hits, benchmarks = results
         else:
             clusters, ext_trig, benchmarks = results
@@ -119,7 +122,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
                 
                 # loop through hits in clusters to calculate drift position
                 for cluster_index in matched_clusters_indices:
-                    if consts.save_hits:
+                    if save_hits:
                         hits_this_cluster_mask = hits['cluster_index'] == cluster_index + max_cluster_index
                         hits_this_cluster = np.copy(hits[hits_this_cluster_mask])
                         z_drift_shift = hits_this_cluster['z_drift']*(hits_this_cluster['t'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
@@ -142,7 +145,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
                 output_file.create_dataset('clusters', data=clusters, maxshape=(None,))
                 # making sure to continously increment cluster_index as we go onto the next batch
                 max_cluster_index += len(clusters)-1
-                if consts.save_hits:
+                if save_hits:
                     output_file.create_dataset('hits', data=hits, maxshape=(None,))
                 output_file.create_dataset('ext_trig', data=ext_trig, maxshape=(None,))
         else:
@@ -151,7 +154,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath):
                 f['clusters'].resize((f['clusters'].shape[0] + clusters.shape[0]), axis=0)
                 f['clusters'][-clusters.shape[0]:] = clusters
                 max_cluster_index += len(clusters)-1
-                if consts.save_hits:
+                if save_hits:
                     f['hits'].resize((f['hits'].shape[0] + hits.shape[0]), axis=0)
                     f['hits'][-hits.shape[0]:] = hits
                 if len(ext_trig) > 0:
