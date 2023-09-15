@@ -75,6 +75,28 @@ class ModuleConfig:
             self.charge_light_matching_upper_PPS_window = full_drift_time + 150000
             self.charge_light_matching_unix_window = 0
             self.ext_trig_PPS_window = 1000
-
+            
+        elif self.module_name == 'module-2':
+            self.detector = 'module-2'
+            self.data_type = 'data'
+            self.detector_dict_path = 'layout/module_2_multi_tile_layout-2022_11_18_04_35_CET.yaml'
+            self.detprop_path = 'detector_properties/module0.yaml'
+            self.use_disabled_channels_list = False
+            self.disabled_channels_list = None
+            self.pedestal_file = 'pedestal/module2_ped-evd-2022_11_18_04_35_CET.json'
+            self.config_file = 'config/module2_config-evd-2022_11_18_04_35_CET.json'
+            self.use_ped_config_files = True
+            self.PACMAN_clock_correction1 = [0., 0.]
+            self.PACMAN_clock_correction2 = [0., 0.]
+            self.PACMAN_clock_correction = True
+            self.timestamp_cut = True
+            self.nBatches = 400
+            self.batches_limit = 400
+            self.ext_trig_matching_tolerance_unix = 1
+            self.ext_trig_matching_tolerance_PPS = 2.0e3 # ns
+            self.charge_light_matching_lower_PPS_window = 150000
+            self.charge_light_matching_upper_PPS_window = full_drift_time + 150000
+            self.charge_light_matching_unix_window = 0
+            self.ext_trig_PPS_window = 1000
         else:
             raise ValueError(f"Unsupported module name: {self.module_name}")
