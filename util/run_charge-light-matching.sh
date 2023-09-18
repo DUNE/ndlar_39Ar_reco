@@ -4,16 +4,17 @@ DET="Module1"
 if [ "${DET}" = "Module0" ]; then
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module0_reco
 elif [ "${DET}" = "Module1" ]; then
-	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module1_reco
+	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module1_reco/39Ar_reco_09132023
 else
 	echo "Exiting as $DET is not a recognized run name"
 	exit 0
 fi
 
 #INFILENAME_CLUSTERS=${OUTDIR}/clusters_selection_2022_02_08_01_47_59_CET.h5
-INFILENAME_CLUSTERS=${OUTDIR}/clusters_selection_2022_02_09_01_57_26_CET.h5
-INFILENAME_LIGHT=${OUTDIR}/light_events_0cd913fb_0cd93db0_20220209_015727.h5
-OUTFILENAME=${OUTDIR}/charge-light-matched-clusters_2022_02_09_01_57_26_CET.h5
+INFILENAME_CLUSTERS=${OUTDIR}/clusters_selection_2022_02_08_05_14_25_CET.h5
+INFILENAME_LIGHT_1=${OUTDIR}/0cd913fb_20220208_051425.h5
+INFILENAME_LIGHT_2=${OUTDIR}/0cd93db0_20220208_051425.h5
+OUTFILENAME=${OUTDIR}/charge-light-matched-clusters_2022_02_08_05_14_25_CET.h5
 
 shifter --image=mjkramer/sim2x2:genie_edep.3_04_00.20230620 --module=None -- /bin/bash << EOF
 set +o posix
@@ -27,7 +28,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 cd charge_reco
-python3 match_light_to_ext_triggers.py ${INFILENAME_CLUSTERS} ${INFILENAME_LIGHT} ${OUTFILENAME}
+python3 match_light_to_ext_triggers.py ${INFILENAME_CLUSTERS} ${OUTFILENAME} ${INFILENAME_LIGHT_1} ${INFILENAME_LIGHT_2} 
 EOF
 
 
