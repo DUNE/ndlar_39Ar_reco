@@ -48,6 +48,15 @@ The output file contains the following datasets:
  - unix (**int**): unix timestamp of external trigger
  - t (**int**): PPS timestamp of external trigger
 
+`light_events` (Optional): Note: Light event timestamps, channels, and waveforms.
+ - id (**int**): ID for light event
+ - tai_ns (**int**): timestamp for light event in nsec
+ - unix (**int**): unix second timestamp for light event
+ - channels_adc1 (**u1**): channel numbers for light event in ADC1
+ - channels_adc2 (**u1**): channel numbers for light event in ADC2
+ - voltage_adc1 (**int**): waveforms for light event in ADC1
+ - voltage_adc2 (**int**): waveforms for light event in ADC2
+
 ### Reconstruction inputs
 The code requires various inputs, most of which are specified in the input configuration files in the `input_config` folder. 
 
@@ -57,43 +66,22 @@ The code requires various inputs, most of which are specified in the input confi
 - `layout` folder: detector-specific pixel layout yamls
 - `pedestal` folder: contains `json` files with channel-by-channel pixel pedestal values
 
-### Light Reconstruction
-The light data reconstruction is done with `ndlar_flow`: https://github.com/DUNE/ndlar_flow/tree/main 
-
-In the `util` folder, there are scripts for running `ndlar_flow` for processing the light data. `ndlar_flow` uses yamls to control the steps to use in reconstruction. `light_event_reconstruction_for_39Ar.yaml` contains light waveform processing steps (e.g. waveform noise filtering, waveform deconvolution, waveform aligning, etc) not including hit finding (the plan is to do hit-finding here). 
-
-To set up `ndlar_flow`:
-```bash
-chmod +x setup_h5flow_ndlar_flow.sh
-./setup_h5flow_ndlar_flow.sh
-```
-
-This will create directories of `h5flow` and `ndlar_flow` and it will make an environment that can be activated with:
-```bash
-source flow.venv/bin/activate
-```
-
-To run the light data reconstruction:
-```bash
-chmod +x run_flow_light_reco.sh
-./run_flow_light_reco.sh
-```
-
-Be wary that the output file contains waveforms and thus is a very large file, so make sure to put it somewhere appropriate for the file size (one module-1 file was ~90 GB!). However, the charge-light matching will produce a much more lightweight file.
+### Making basic selection using external triggers
 
 To make selections on data using external triggers:
 ```bash
 python3 charge_cluster_selections.py <input clusters h5 file> <output clusters selection h5 file>
 ```
-This will produce a new file selecting only clusters with matched external triggers that have less than `x` hits per cluster and less than `N` clusters per matching window. 
+This will produce a new file selecting only clusters with matched external triggers that have less than `x` hits per cluster and less than `N` clusters per matching window. By default it is a somewhat larger window than is probably necessary for an analysis, so that one can do further analysis later but on a light-weight file.
 
-To run matching between external triggers and light events (thus charge to light matching):
-```bash
-python3 match_light_to_ext_triggers.py <input clusters selection file> <light events flow h5 file> <new output h5 file>
-```
-This will produce an h5 file with clusters and light events, with associations between the two via `ext_trig_index` parameter which has the index of the associated light event in the light dataset.
+### Light Event Building
+The light event building utilizing the `adc64format` tool: https://github.com/larpix/adc64format 
 
-There are bash scripts in the `util` folder for running each step on NERSC Perlmutter.
+In the `util` folder, there is a script called `util/run_light_event_building.sh` that converts the light .data files to .h5 files. It utilizes the `adc64_to_hdf5.py` script found in `adc64format`, so you have to clone and install `adc64format` to get it. You may need to modify the bash script for the different paths to the input location and output location. 
+
+### Charge to Light Matching
+
+Now one can run the charge-light matching with `util/run_charge-light-matching.sh`. It is much faster to run this using a file produced at the selection step, since the number of events to match is much smaller than a normal file. Currently the matching script expects two light data h5 files produced with `adc64format` (one per ADC) and a charge clusters file. The output will be an h5 file containing clusters and matched light events, along with an association between the two via the `ext_trig_index` parameter. 
 
 ### Analysis examples
 To access the datasets in python:
