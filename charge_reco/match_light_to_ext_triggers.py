@@ -7,15 +7,18 @@ import numpy as np
 from tqdm import tqdm 
 import h5py
 import os
+from input_config import ModuleConfig
 
-def main(input_clusters_file, output_filename, *input_light_files):
+def main(input_clusters_file, output_filename, *input_light_files, input_config_name):
     """
     # Args:
           input_clusters_file (str): path to file that contains charge clusters 
                 and external triggers processed with charge_clustering.py
           output_filename (str): path to hdf5 output file
           input_light_files (str): paths to files that contain hdf5 files containing light data processed with adc64format
+          input_config_name (str): name of detector (e.g. module-1)
     """
+    module = ModuleConfig(input_config_name)
     if os.path.exists(output_filename):
         raise Exception('Output file '+ str(output_filename) + ' already exists.')
     # get clusters
@@ -51,10 +54,11 @@ def main(input_clusters_file, output_filename, *input_light_files):
     light_index = 0
     light_event_indices = np.zeros(len(clusters), dtype='i8')
     
+    samples = module.samples
     light_events_dtype = np.dtype([('id', '<i4'), ('tai_ns', '<i8'), \
                                    ('unix', '<i8'), ('channels_adc1', 'u1', (48,)), \
                                    ('channels_adc2', 'u1', (48,)), \
-                                    ('voltage_adc1', 'i4', (48, 1000)), ('voltage_adc2', 'i4', (48, 1000))])
+                                    ('voltage_adc1', 'i4', (48, samples)), ('voltage_adc2', 'i4', (48, samples))])
     light_events_all = np.zeros((0,), dtype=light_events_dtype)
     
     batch_size = 500

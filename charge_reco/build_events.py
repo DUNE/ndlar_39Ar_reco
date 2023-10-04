@@ -99,7 +99,7 @@ def getEventIDs(txyz, mc_assn, tracks, event_ids):
         event_ids[i] = event_id
 
 def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
-                                      max_cluster_index, mc_assn, tracks):
+                         max_cluster_index, mc_assn, tracks,save_hits):
     ### Make hits and clusters datasets from DBSCAN clusters and corresponding hits
     # Inputs: 
     #   labels: list of labels from DBSCAN
@@ -124,7 +124,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
         getEventIDs(txyz, mc_assn, tracks, event_ids)
     else:
         event_ids = np.ones_like(len(txyz))*-1
-    if consts.save_hits:
+    if save_hits:
         unique_ids = unique_ids[indices_sorted]
         # add hits to hits dataset
         hits = np.zeros((len(labels),), dtype=consts.hits_dtype)
@@ -184,13 +184,14 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
     clusters['z_drift_mid'] = z_direction
     clusters['z_drift_max'] = z_direction
     clusters['ext_trig_index'] = np.ones(len(n_vals), dtype='i4')*-1
-    if consts.save_hits:
+    if save_hits:
         return clusters, hits
     else:
         return clusters
 
 def analysis(packets, pixel_xy, mc_assn, tracks, module, max_cluster_index, \
-             disabled_channel_IDs, detprop, pedestal_dict, config_dict, dbscan):
+             disabled_channel_IDs, detprop, pedestal_dict, \
+             config_dict, dbscan, save_hits):
     ## do charge reconstruction
     clusters = np.zeros((0,), dtype=consts.clusters_dtype)
     hits = np.zeros((0,), dtype=consts.hits_dtype)
@@ -267,8 +268,8 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, max_cluster_index, \
             unix=unix, io_group=io_group,\
             unique_ids=unique_ids,\
             max_cluster_index=max_cluster_index,\
-            mc_assn=mc_assn, tracks=tracks)
-        if consts.save_hits:
+            mc_assn=mc_assn, tracks=tracks, save_hits=save_hits)
+        if save_hits:
             clusters = results[0]
             hits = results[1]
         else:
@@ -280,7 +281,7 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, max_cluster_index, \
                  'match_ext_triggers': match_ext_triggers, \
                  'zip_time': zip_time, 'dbscan_time': dbscan_time, \
                  'find_charge_clusters_time': find_charge_clusters_time}
-    if consts.save_hits:
+    if save_hits:
         return clusters, ext_trig, hits, benchmarks
     else:
         return clusters, ext_trig, benchmarks
