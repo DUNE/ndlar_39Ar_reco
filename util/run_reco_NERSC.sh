@@ -18,7 +18,7 @@ fi
 #PKT_FILENAME=packet_2022_02_08_12_48_18_CET
 PKT_FILENAME=selftrigger-binary-2022_11_19_04_31_CET.packet
 INFILENAME=${data_folder}/${PKT_FILENAME}.h5
-OUTFILENAME=${OUTDIR}/${PKT_FILENAME}_clusters.h5
+OUTFILENAME=${OUTDIR}/${PKT_FILENAME}_clusters_test.h5
 
 shifter --image=mjkramer/sim2x2:genie_edep.3_04_00.20230620 --module=None -- /bin/bash << EOF
 set +o posix

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-DET="module-1"
+DET="module-2"
 if [ "${DET}" = "module-0" ]; then
     OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module0_reco
 elif [ "${DET}" = "module-1" ]; then
@@ -8,9 +8,13 @@ elif [ "${DET}" = "module-1" ]; then
     data_folder=/global/cfs/cdirs/dune/www/data/Module1/LRS/SingleModule_Jan22
     ADC_name_1=0cd913fb
     ADC_name_2=0cd93db0
-    file_timestamp=20220208_130819
+    file_timestamp=20220208_141741
 elif [ "${DET}" = "module-2" ]; then
     OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module2_reco
+    data_folder=/global/cfs/cdirs/dune/www/data/Module2/LRS.1/cosmic
+    ADC_name_1=0cd8d631
+    ADC_name_2=0cd913fa
+    file_timestamp=20221119_043121
 else
     echo "Exiting as $DET is not a recognized run name"
     exit 0
