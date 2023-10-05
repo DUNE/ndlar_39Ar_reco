@@ -29,7 +29,7 @@ class ModuleConfig:
             self.charge_light_matching_unix_window = 0
             self.ext_trig_PPS_window = 1000
 
-        if self.module_name == 'module-0_MC':
+        elif self.module_name == 'module-0_MC':
             self.detector = 'module-0'
             self.data_type = 'MC'
             self.detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.yaml'
@@ -86,6 +86,29 @@ class ModuleConfig:
             self.disabled_channels_list = None
             self.pedestal_file = 'pedestal/module2_ped-evd-2022_11_18_04_35_CET.json'
             self.config_file = 'config/module2_config-evd-2022_11_18_04_35_CET.json'
+            self.use_ped_config_files = True
+            self.PACMAN_clock_correction1 = [0., 0.]
+            self.PACMAN_clock_correction2 = [0., 0.]
+            self.PACMAN_clock_correction = True
+            self.timestamp_cut = True
+            self.nBatches = 400
+            self.batches_limit = 400
+            self.ext_trig_matching_tolerance_unix = 1
+            self.ext_trig_matching_tolerance_PPS = 2.0e3 # ns
+            self.charge_light_matching_lower_PPS_window = 150000
+            self.charge_light_matching_upper_PPS_window = full_drift_time + 150000
+            self.charge_light_matching_unix_window = 0
+            self.ext_trig_PPS_window = 1000
+            self.samples = 1024
+        elif self.module_name == 'module-X':
+            self.detector = 'module-X'
+            self.data_type = 'data'
+            self.detector_dict_path = 'layout/module1_multi_tile_layout-2.3.16.yaml'
+            self.detprop_path = 'detector_properties/module0.yaml'
+            self.use_disabled_channels_list = False
+            self.disabled_channels_list = None
+            self.pedestal_file = 'pedestal/moduleX_packet-2023_10_03_11_18_CESTevd_ped.json'
+            self.config_file = 'config/moduleX_evd_config_23-10-04_16-37-01.json'
             self.use_ped_config_files = True
             self.PACMAN_clock_correction1 = [0., 0.]
             self.PACMAN_clock_correction2 = [0., 0.]
