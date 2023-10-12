@@ -56,9 +56,9 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     
     samples = module.samples
     light_events_dtype = np.dtype([('id', '<i4'), ('tai_ns', '<i8'), \
-                                   ('unix', '<i8'), ('channels_adc1', 'u1', (48,)), \
-                                   ('channels_adc2', 'u1', (48,)), \
-                                    ('voltage_adc1', 'i4', (48, samples)), ('voltage_adc2', 'i4', (48, samples))])
+                                   ('unix', '<i8'), ('channels_adc1', 'u1', (24,)), \
+                                   ('channels_adc2', 'u1', (24,)), \
+                                    ('voltage_adc1', 'i4', (24, samples)), ('voltage_adc2', 'i4', (24, samples))])
     light_events_all = np.zeros((0,), dtype=light_events_dtype)
     
     batch_size = 500

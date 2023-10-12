@@ -103,7 +103,7 @@ class ModuleConfig:
         elif self.module_name == 'module-X':
             self.detector = 'module-X'
             self.data_type = 'data'
-            self.detector_dict_path = 'layout/module1_multi_tile_layout-2.3.16.yaml'
+            self.detector_dict_path = 'layout/moduleX_multi_tile_layout.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
             self.use_disabled_channels_list = False
             self.disabled_channels_list = None

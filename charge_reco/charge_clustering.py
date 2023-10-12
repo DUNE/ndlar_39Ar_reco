@@ -128,7 +128,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
                         z_drift_shift = hits_this_cluster['z_drift']*(hits_this_cluster['t'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
                         z_drift = hits_this_cluster['z_anode'] + z_drift_shift
                         np.put(hits['z_drift'], np.where(hits_this_cluster_mask)[0], z_drift)
-                    print(f"z_anode = {clusters[cluster_index]['z_anode']}; direction = {clusters[cluster_index]['z_drift_min']}; delta z = {clusters[cluster_index]['z_drift_min']*(clusters[cluster_index]['t_min'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor}")
+                    #print(f"z_anode = {clusters[cluster_index]['z_anode']}; direction = {clusters[cluster_index]['z_drift_min']}; delta z = {clusters[cluster_index]['z_drift_min']*(clusters[cluster_index]['t_min'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor}")
                     # calculate drift coordinate for clusters
                     z_drift_min = clusters[cluster_index]['z_anode'] + clusters[cluster_index]['z_drift_min']*(clusters[cluster_index]['t_min'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
                     z_drift_mid = clusters[cluster_index]['z_anode'] + clusters[cluster_index]['z_drift_mid']*(clusters[cluster_index]['t_mid'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
