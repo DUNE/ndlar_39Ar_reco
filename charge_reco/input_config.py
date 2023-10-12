@@ -114,8 +114,8 @@ class ModuleConfig:
             self.PACMAN_clock_correction2 = [0., 0.]
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
-            self.nBatches = 400
-            self.batches_limit = 400
+            self.nBatches = 200
+            self.batches_limit = 200
             self.ext_trig_matching_tolerance_unix = 1
             self.ext_trig_matching_tolerance_PPS = 2.0e3 # ns
             self.charge_light_matching_lower_PPS_window = 150000
