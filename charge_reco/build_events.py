@@ -180,9 +180,15 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
     clusters['y_mid'] = (y_min + y_max)/2
     clusters['y_max'] = y_max
     clusters['z_anode'] = z_anode
-    clusters['z_drift_min'] = z_direction
-    clusters['z_drift_mid'] = z_direction
-    clusters['z_drift_max'] = z_direction
+    # inject anode plane direction into z_drift
+    neg_z_anode_mask = z_anode < 0
+    pos_z_anode_mask = z_anode > 0
+    clusters['z_drift_min'][neg_z_anode_mask] = 1
+    clusters['z_drift_mid'][neg_z_anode_mask] = 1
+    clusters['z_drift_max'][neg_z_anode_mask] = 1
+    clusters['z_drift_min'][pos_z_anode_mask] = -1
+    clusters['z_drift_mid'][pos_z_anode_mask] = -1
+    clusters['z_drift_max'][pos_z_anode_mask] = -1
     clusters['ext_trig_index'] = np.ones(len(n_vals), dtype='i4')*-1
     if save_hits:
         return clusters, hits
