@@ -132,7 +132,7 @@ class ModuleConfig:
             self.detector = 'SingleCube'
             self.data_type = 'data'
             self.detector_dict_path = 'layout/single_tile_layout-2.0.1.yaml'
-            self.detprop_path = 'detector_properties/module0.yaml'
+            self.detprop_path = 'detector_properties/SingleCube.yaml'
             self.use_disabled_channels_list = False
             self.disabled_channels_list = None
             self.pedestal_file = 'pedestal/Bern_SC_datalog_2020_10_12_16_45_30_PDT_evd_ped.json'
