@@ -24,7 +24,6 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
     
     detector = module.detector
     data_type = module.data_type
-    match_charge_to_ext_trig = True
     
     input_packets_filename = input_filepath
     output_events_filename = output_filepath
@@ -110,7 +109,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
         list_of_trigs = []
         # match clusters to external triggers
         matching_start_time = time.time()
-        if match_charge_to_ext_trig:
+        if module.match_charge_to_ext_trig:
             for j, trig in enumerate(ext_trig):
                 # match clusters to ext triggers
                 matched_clusters_mask = (clusters['t_min'] > trig['t'] - lower_PPS_window) & \
@@ -172,7 +171,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
             print(f"Analysis function took {analysis_total_time:.3f} seconds, and {(analysis_total_time/batch_total_time * 100):.3f}% of the total time.")
             for benchmark_key in benchmarks.keys():
                 print(f"{benchmark_key} step took {benchmarks[benchmark_key]:.3f} seconds.")
-            if match_charge_to_ext_trig:
+            if module.match_charge_to_ext_trig:
                 matching_total_time = matching_end_time - matching_start_time
                 print(f"Ext trigger matching took {matching_total_time:.3f} seconds, and {(matching_total_time/batch_total_time  * 100):.3f}% of the total time.")
             print(' ')

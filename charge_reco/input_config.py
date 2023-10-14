@@ -20,6 +20,7 @@ class ModuleConfig:
             self.PACMAN_clock_correction2 = [-9.329, 9.0283e-07]
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
+            self.match_charge_to_ext_trig = True
             self.nBatches = 400
             self.batches_limit = 400
             self.ext_trig_matching_tolerance_unix = 1
@@ -43,6 +44,7 @@ class ModuleConfig:
             self.PACMAN_clock_correction2 = [-9.329, 9.0283e-07]
             self.PACMAN_clock_correction = False
             self.timestamp_cut = False
+            self.match_charge_to_ext_trig = False
             self.nBatches = 10
             self.batches_limit = 10
             self.ext_trig_matching_tolerance_unix = 1
@@ -67,6 +69,7 @@ class ModuleConfig:
             self.PACMAN_clock_correction2 = [0., 0.]
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
+            self.match_charge_to_ext_trig = True
             self.nBatches = 400
             self.batches_limit = 400
             self.ext_trig_matching_tolerance_unix = 1
@@ -91,6 +94,7 @@ class ModuleConfig:
             self.PACMAN_clock_correction2 = [0., 0.]
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
+            self.match_charge_to_ext_trig = True
             self.nBatches = 400
             self.batches_limit = 400
             self.ext_trig_matching_tolerance_unix = 1
@@ -114,6 +118,7 @@ class ModuleConfig:
             self.PACMAN_clock_correction2 = [0., 0.]
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
+            self.match_charge_to_ext_trig = True
             self.nBatches = 200
             self.batches_limit = 200
             self.ext_trig_matching_tolerance_unix = 1
@@ -137,6 +142,7 @@ class ModuleConfig:
             self.PACMAN_clock_correction2 = [0., 0.]
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
+            self.match_charge_to_ext_trig = False
             self.nBatches = 50
             self.batches_limit = 50
             self.ext_trig_matching_tolerance_unix = 1
