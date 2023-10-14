@@ -123,5 +123,28 @@ class ModuleConfig:
             self.charge_light_matching_unix_window = 0
             self.ext_trig_PPS_window = 1000
             self.samples = 1024
+    elif self.module_name == 'SingleCube':
+            self.detector = 'SingleCube'
+            self.data_type = 'data'
+            self.detector_dict_path = 'layout/single_tile_layout-2.0.1.yaml'
+            self.detprop_path = 'detector_properties/module0.yaml'
+            self.use_disabled_channels_list = False
+            self.disabled_channels_list = None
+            self.pedestal_file = 'pedestal/Bern_SC_datalog_2020_10_12_16_45_30_PDT_evd_ped.json'
+            self.config_file = 'config/Bern_SC_evd_config_20-10-26_10-48-37.json'
+            self.use_ped_config_files = True
+            self.PACMAN_clock_correction1 = [0., 0.]
+            self.PACMAN_clock_correction2 = [0., 0.]
+            self.PACMAN_clock_correction = True
+            self.timestamp_cut = True
+            self.nBatches = 50
+            self.batches_limit = 50
+            self.ext_trig_matching_tolerance_unix = 1
+            self.ext_trig_matching_tolerance_PPS = 2.0e3 # ns
+            self.charge_light_matching_lower_PPS_window = 150000
+            self.charge_light_matching_upper_PPS_window = full_drift_time + 150000
+            self.charge_light_matching_unix_window = 0
+            self.ext_trig_PPS_window = 1000
+            self.samples = 1024
         else:
             raise ValueError(f"Unsupported module name: {self.module_name}")
