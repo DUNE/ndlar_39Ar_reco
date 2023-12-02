@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-DET="module-X"
+DET="module-0"
 if [ "${DET}" = "module-0" ]; then
 	data_folder=/global/cfs/cdirs/dune/www/data/Module0/TPC1+2/dataRuns/packetData
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module0_reco
@@ -14,13 +14,16 @@ elif [ "${DET}" = "module-X" ]; then
 	#data_folder=/global/cfs/cdirs/dune/www/data/ModuleX/commission
         data_folder=/global/cfs/cdirs/dune/users/sfogarty/ModuleX_reco
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/ModuleX_reco
+elif [ "${DET}" = "SingleCube" ]; then
+        #data_folder=/global/cfs/cdirs/dune/www/data/ModuleX/commission
+        data_folder=/global/cfs/cdirs/dune/users/sfogarty/Bern_SC_reco
+        OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Bern_SC_reco
 else
 	echo "Exiting as $DET is not a recognized run name"
 	exit 0
 fi
 
-#PKT_FILENAME=packet_2022_02_08_12_48_18_CET
-PKT_FILENAME=packets-2023_10_04_23_28_CEST
+PKT_FILENAME=packets-2023_10_04_07_55_CEST
 INFILENAME=${data_folder}/${PKT_FILENAME}.h5
 OUTFILENAME=${OUTDIR}/${PKT_FILENAME}_clusters.h5
 
@@ -36,7 +39,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 cd charge_reco
-python3 charge_clustering.py ${DET} ${INFILENAME} ${OUTFILENAME}
+python3 charge_clustering.py ${DET} ${INFILENAME} ${OUTFILENAME} --save_hits=True
 EOF
 
 
