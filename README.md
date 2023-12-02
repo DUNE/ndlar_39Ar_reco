@@ -63,7 +63,8 @@ The code requires various inputs, most of which are specified in the input confi
 - `config` folder: contains `json` files that have channel-by-channel v_ref and v_cm settings for the detector
 - `detector_properties` folder: contains `yaml` files that have charge and light geometry parameters
 - `disabled_channels` folder: contains `npz` files of channels to exclude in the reconstruction (e.g. noisy channels). Contains 1D arrays of keys (pixel unique id) and values
-- `layout` folder: detector-specific pixel layout yamls
+- `charge_layout` folder: detector-specific pixel layout yamls
+- `light_layout` folder: light detector layout yamls
 - `pedestal` folder: contains `json` files with channel-by-channel pixel pedestal values
 
 ### Making basic selection using external triggers
