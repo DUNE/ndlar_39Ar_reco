@@ -92,4 +92,9 @@ def load_pedestal_and_config(module):
             for key, value in load_json(infile).items():
                 config_dict[key] = value
     return pedestal_dict, config_dict
-  
+
+def load_light_geometry(light_geometry_path):
+    # Function to open light detector geometry yaml
+    with open(light_geometry_path, 'r') as file:
+        geometry_data = yaml.safe_load(file)
+    return geometry_data
