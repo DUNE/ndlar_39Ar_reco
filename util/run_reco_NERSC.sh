@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-DET="module-0"
+DET="module-1"
 if [ "${DET}" = "module-0" ]; then
 	data_folder=/global/cfs/cdirs/dune/www/data/Module0/TPC1+2/dataRuns/packetData
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module0_reco
@@ -11,8 +11,7 @@ elif [ "${DET}" = "module-2" ]; then
 	data_folder=/global/cfs/cdirs/dune/www/data/Module2/packetized/TPC12
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module2_reco
 elif [ "${DET}" = "module-X" ]; then
-	#data_folder=/global/cfs/cdirs/dune/www/data/ModuleX/commission
-        data_folder=/global/cfs/cdirs/dune/users/sfogarty/ModuleX_reco
+    data_folder=/global/cfs/cdirs/dune/users/sfogarty/ModuleX_reco
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/ModuleX_reco
 elif [ "${DET}" = "SingleCube" ]; then
         #data_folder=/global/cfs/cdirs/dune/www/data/ModuleX/commission

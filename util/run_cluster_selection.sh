@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 
-DET="ModuleX"
-if [ "${DET}" = "Module0" ]; then
+DET="module-1"
+if [ "${DET}" = "module-0" ]; then
 	INDIR=/global/cfs/cdirs/dune/users/sfogarty/Module0_reco
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module0_reco
-elif [ "${DET}" = "Module1" ]; then
+elif [ "${DET}" = "module-1" ]; then
 	INDIR=/global/cfs/cdirs/dune/users/sfogarty/Module1_reco/39Ar_reco_09132023
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module1_reco/39Ar_reco_09132023
-elif [ "${DET}" = "Module2" ]; then
+elif [ "${DET}" = "module-2" ]; then
 	INDIR=/global/cfs/cdirs/dune/users/sfogarty/Module2_reco
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module2_reco
-elif [ "${DET}" = "ModuleX" ]; then
+elif [ "${DET}" = "module-X" ]; then
 	INDIR=/global/cfs/cdirs/dune/users/sfogarty/ModuleX_reco
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/ModuleX_reco/60Co_source
 else
