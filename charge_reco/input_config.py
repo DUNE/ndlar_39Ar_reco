@@ -9,7 +9,7 @@ class ModuleConfig:
         if self.module_name == 'module-0':
             self.detector = 'module-0'
             self.data_type = 'data'
-            self.detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.yaml'
+            self.detector_dict_path = 'charge_layout/module0_multi_tile_layout-2.3.16.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
             self.use_disabled_channels_list = True
             self.disabled_channels_list = 'disabled_channels/module0_disabled_channels_noise_cut.npz'
@@ -33,7 +33,7 @@ class ModuleConfig:
         elif self.module_name == 'module-0_MC':
             self.detector = 'module-0'
             self.data_type = 'MC'
-            self.detector_dict_path = 'layout/module0_multi_tile_layout-2.3.16.yaml'
+            self.detector_dict_path = 'charge_layout/module0_multi_tile_layout-2.3.16.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
             self.use_disabled_channels_list = False
             self.disabled_channels_list = 'disabled_channels/module0_disabled_channels_noise_cut.npz'
@@ -58,7 +58,7 @@ class ModuleConfig:
         elif self.module_name == 'module-1':
             self.detector = 'module-1'
             self.data_type = 'data'
-            self.detector_dict_path = 'layout/module1_multi_tile_layout-2.3.16.yaml'
+            self.detector_dict_path = 'charge_layout/module1_multi_tile_layout-2.3.16.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
             self.use_disabled_channels_list = False
             self.disabled_channels_list = 'disabled_channels/module1_disabled_channels_noise_cut.npz'
@@ -83,7 +83,7 @@ class ModuleConfig:
         elif self.module_name == 'module-2':
             self.detector = 'module-2'
             self.data_type = 'data'
-            self.detector_dict_path = 'layout/module_2_multi_tile_layout-2022_11_18_04_35_CET.yaml'
+            self.detector_dict_path = 'charge_layout/module_2_multi_tile_layout-2022_11_18_04_35_CET.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
             self.use_disabled_channels_list = False
             self.disabled_channels_list = None
@@ -107,12 +107,12 @@ class ModuleConfig:
         elif self.module_name == 'module-X':
             self.detector = 'module-X'
             self.data_type = 'data'
-            self.detector_dict_path = 'layout/moduleX_multi_tile_layout.yaml'
+            self.detector_dict_path = 'charge_layout/moduleX_multi_tile_layout.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
             self.use_disabled_channels_list = False
             self.disabled_channels_list = None
-            self.pedestal_file = 'pedestal/moduleX_packet-2023_10_03_11_18_CESTevd_ped.json'
-            self.config_file = 'config/moduleX_evd_config_23-10-04_16-37-01.json'
+            self.pedestal_file = 'pedestal/moduleX_packet-2023_10_03_11_18_CESTevd_ped_corrected.json'
+            self.config_file = 'config/moduleX_evd_config_23-10-04_16-37-01_corrected.json'
             self.use_ped_config_files = True
             self.PACMAN_clock_correction1 = [0., 0.]
             self.PACMAN_clock_correction2 = [0., 0.]
@@ -128,10 +128,10 @@ class ModuleConfig:
             self.charge_light_matching_unix_window = 0
             self.ext_trig_PPS_window = 1000
             self.samples = 1024
-    elif self.module_name == 'SingleCube':
+        elif self.module_name == 'SingleCube':
             self.detector = 'SingleCube'
             self.data_type = 'data'
-            self.detector_dict_path = 'layout/single_tile_layout-2.0.1.yaml'
+            self.detector_dict_path = 'charge_layout/single_tile_layout-2.0.1.yaml'
             self.detprop_path = 'detector_properties/SingleCube.yaml'
             self.use_disabled_channels_list = False
             self.disabled_channels_list = None
@@ -143,8 +143,8 @@ class ModuleConfig:
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
             self.match_charge_to_ext_trig = False
-            self.nBatches = 50
-            self.batches_limit = 50
+            self.nBatches = 10
+            self.batches_limit = 10
             self.ext_trig_matching_tolerance_unix = 1
             self.ext_trig_matching_tolerance_PPS = 2.0e3 # ns
             self.charge_light_matching_lower_PPS_window = 150000
