@@ -14,8 +14,79 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import loading
+from input_config import ModuleConfig
+from typing import List, Dict, Union
 
-def apply_data_cuts(input_filepath, use_disabled_channels_cut=True):
+def is_point_inside_ellipse(x, y, h, k, a, b):
+    """
+    Check if a point (x, y) is inside an ellipse centered at (h, k) with semi-axes a and b.
+    This is used to determine if a cluster is within an ellipse relative to the middle 
+    of a photon detector tile. 
+
+    Parameters:
+        x (float): x-coordinate of the point to check.
+        y (float): y-coordinate of the point to check.
+        h (float): x-coordinate of the ellipse's center.
+        k (float): y-coordinate of the ellipse's center.
+        a (float): Length of the semi-major axis of the ellipse.
+        b (float): Length of the semi-minor axis of the ellipse.
+
+    Returns:
+        bool: True if the point is inside the ellipse, False otherwise.
+    """
+    return ((x - h)**2 / a**2) + ((y - k)**2 / b**2) <= 1
+
+def get_detector_position(adc: int, channel: int, geometry_data: Dict) -> Union[List[float], str]:
+    # Extract relevant data from the geometry data
+    tpc_center = geometry_data['tpc_center']
+    det_center = geometry_data['det_center']
+    det_adc_all = geometry_data['det_adc']  # This now corresponds to all TPCs
+    det_chan_all = geometry_data['det_chan']  # This also corresponds to all TPCs
+    
+    # Initialize variables to hold detector and tpc numbers
+    detector_number = None
+    tpc_number = None
+    
+    # Loop through all TPCs to find the one corresponding to the given channel and ADC
+    for tpc in range(len(det_adc_all)):
+        det_adc = det_adc_all[tpc]
+        det_chan = det_chan_all[tpc]
+        for det_num, adc_num in det_adc.items():
+            if adc_num != adc:  # Skip if the ADC number doesn't match
+                continue
+            if channel in det_chan[det_num]:
+                detector_number = det_num
+                tpc_number = tpc
+                break
+                
+    # If detector_number and tpc_number are still None, the channel was not found
+    if detector_number is None or tpc_number is None:
+        return None
+    
+    # Calculate 3D position
+    x, y, _ = det_center[int(detector_number)]
+    _, _, z = tpc_center[int(tpc_number)]
+    
+    return [x, y, z]
+
+def sum_waveforms(wvfms, channels, plot_to_adc_channel_dict, adc_channel_to_position, light_id):
+    # Sum the waveforms in a particular tile in a particular event
+    position = np.array([0.0, 0.0, 0.0])
+    for j, adc_ch in enumerate(plot_to_adc_channel_dict):
+            position += np.array(adc_channel_to_position[adc_ch])
+            if j==0:
+                wvfm_sum = np.array(wvfms[adc_ch[0]][light_id])[channels[adc_ch[0]][light_id] == adc_ch[1]]
+                if np.size(wvfm_sum) > 0:
+                    wvfm_sum -= np.mean(wvfm_sum[0][600:1000]).astype('int16')
+            else:
+                wvfm = np.array(wvfms[adc_ch[0]][light_id])[channels[adc_ch[0]][light_id] == adc_ch[1]]
+                if np.size(wvfm) > 0:
+                    wvfm_sum = wvfm_sum + wvfm[0] - np.mean(wvfm[0][600:1000]).astype('int16')
+    position = position / 6
+    return wvfm_sum, position
+
+def apply_data_cuts(input_config_name, input_filepath, use_disabled_channels_cut=True, do_light_proximity_cut=True):
     
     # check that the input file exists
     if not os.path.exists(input_filepath):
@@ -36,6 +107,178 @@ def apply_data_cuts(input_filepath, use_disabled_channels_cut=True):
     except:
         raise Exception("'light_events' dataset not found in input file.")
     
+    data_directory = os.path.dirname(input_filepath)
+    output_filepath = input_filepath.split('.')[0] + '_with-cuts' + '.h5'
+    
+    # Get path for light geometry
+    module = ModuleConfig(input_config_name)
+    detector = module.detector
+    light_geometry_path = module.light_det_geom_path
+    light_geometry = loading.load_light_geometry(light_geometry_path)
+    
+    # make dictionaries of (adc_num, channel_num) keys with positions
+    io0_dict_left = {} 
+    io0_dict_right = {} 
+    io1_dict_left = {}
+    io1_dict_right = {}
+    for adc_id in range(0,2):
+        for channel_id in range(4, 64):
+            position = get_detector_position(adc_id, channel_id, light_geometry)
+            if position is not None:
+                if position[2] < 0 and position[0] < 0:
+                    io0_dict_left[(adc_id, channel_id)] = position
+                elif position[2] < 0 and position[0] > 0:
+                    io0_dict_right[(adc_id, channel_id)] = position
+                elif position[2] > 0 and position[0] < 0:
+                    io1_dict_left[(adc_id, channel_id)] = position
+                elif position[2] > 0 and position[0] > 0:
+                    io1_dict_right[(adc_id, channel_id)] = position
+
+    # plot index to list of (adc, channel) combos that correspond to a full PD tile
+    io0_left_y_plot_dict = {0: [(1, 15),(1, 14),(1, 13),(1, 12),(1, 11),(1, 10)], \
+                           1: [(0, 15),(0, 14),(0, 13),(0, 12),(0, 11),(0, 10)], \
+                           2: [(1, 9),(1, 8),(1, 7),(1, 6),(1, 5),(1, 4)], \
+                           3: [(0, 9),(0, 8),(0, 7),(0, 6),(0, 5),(0, 4)]}
+
+    io0_right_y_plot_dict = {0: [(1, 31),(1, 30),(1, 29),(1, 28),(1, 27),(1, 26)], \
+                           1: [(0, 31),(0, 30),(0, 29),(0, 28),(0, 27),(0, 26)], \
+                           2: [(1, 25),(1, 24),(1, 23),(1, 22),(1, 21),(1, 20)], \
+                           3: [(0, 25),(0, 24),(0, 23),(0, 22),(0, 21),(0, 20)]}
+
+    io1_left_y_plot_dict = {0: [(1, 63),(1, 62),(1, 61),(1, 60),(1, 59),(1, 58)], \
+                           1: [(0, 63),(0, 62),(0, 61),(0, 60),(0, 59),(0, 58)], \
+                           2: [(1, 57),(1, 56),(1, 55),(1, 54),(1, 53),(1, 52)], \
+                           3: [(0, 57),(0, 56),(0, 55),(0, 54),(0, 53),(0, 52)]}
+
+    io1_right_y_plot_dict = {0: [(1, 47),(1, 46),(1, 45),(1, 44),(1, 43),(1, 42)], \
+                           1: [(0, 47),(0, 46),(0, 45),(0, 44),(0, 43),(0, 42)], \
+                           2: [(1, 41),(1, 40),(1, 39),(1, 38),(1, 37),(1, 36)], \
+                           3: [(0, 41),(0, 40),(0, 39),(0, 38),(0, 37),(0, 36)]}
+    
+    # parameters for cuts
+    N = 5 # clusters allowed in drift window
+    x = 10 # max hits per cluster allowed
+    d = 150 # mm, max distance of cluster from light hit
+    hit_threshold = 1000
+    hit_upper_bound = 1e9
+    rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
+    shape = 'ellipse' # proximity cut type. Other option: 'circle'.
+    ellipse_b = 175 # mm
+    clusters = np.array(f_in['clusters'])
+    clusters_groups_selection = []
+    
+    # Remove single hit clusters that come from "noisy" channels
+    if use_disabled_channels_cut:
+        timestamp = input_filepath.split('charge-light-matched-clusters_')[1].split('.')[0]
+        try:
+            clusters_file = h5py.File(data_directory+'/packet-'+timestamp+'_clusters.h5','r')
+        except:
+            clusters_file = h5py.File(data_directory+'/packets-'+timestamp+'_clusters.h5','r')
+        single_hit_clusters = clusters_file['clusters'][clusters_file['clusters']['nhit'] == 1]
+        combined_dstack = np.dstack((single_hit_clusters['x_mid'], single_hit_clusters['y_mid'], single_hit_clusters['z_anode']))[0]
+        
+        from collections import Counter
+        # count occurrences of each unique tuple of x,y, and z
+        count_dict = Counter([tuple(row) for row in combined_dstack])
+        tuples_to_remove = np.array(list(count_dict.keys()))[np.array(list(count_dict.values()))/(20*60) > rate_threshold]
+        print(f'{len(tuples_to_remove)} channels disabled.')
+        print(f'{100*len(tuples_to_remove)/len(list(count_dict.keys()))} percentage of channels disabled.')
+        
+        # remove 1-hit clusters that come from channel to remove
+        from tqdm import tqdm
+        for key in tuples_to_remove:
+            mask = (single_hit_clusters['x_mid'] == key[0]) & (single_hit_clusters['y_mid'] == key[1]) & (single_hit_clusters['z_anode'] == key[2])
+            clusters = clusters[~np.isin(clusters['id'], single_hit_clusters[mask]['id'])]
+    
+    # group clusters by light event
+    light_ids = np.array(clusters['ext_trig_index'])
+    sorted_indices = np.argsort(light_ids)
+    light_ids = light_ids[sorted_indices]
+    clusters = clusters[sorted_indices]
+    light_trig_indices = np.concatenate(([0], np.flatnonzero(light_ids[:-1] != light_ids[1:])+1, [len(light_ids)]))
+    grouped_clusters = np.split(clusters, light_trig_indices[1:-1])
+    light_ids = np.unique(light_ids)
+    
+    # make event selection based on number of clusters allowed in event and number of hits allowed per cluster
+    total_clusters = 0
+    light_ids_mask = np.zeros(len(light_ids), dtype=bool)
+    for i, group in enumerate(grouped_clusters):
+        if len(group) <= N and np.all(group['nhit'] <= x): 
+            total_clusters += len(group)
+            clusters_groups_selection.append(group)
+            light_ids_mask[i] = True
+    light_ids = light_ids[light_ids_mask]
+    
+    if do_light_proximity_cut:
+        wvfms = [f_in['light_events']['voltage_adc1'], f_in['light_events']['voltage_adc2']]
+        channels = [f_in['light_events']['channels_adc1'], f_in['light_events']['channels_adc2']]
+        plot_to_adc_channel_dict = [io0_left_y_plot_dict, io0_right_y_plot_dict, io1_left_y_plot_dict, io1_right_y_plot_dict]
+        adc_channel_to_position = [io0_dict_left, io0_dict_right, io1_dict_left, io1_dict_right]
+
+        n_light_hits = 0
+        light_ids_new = []
+        clusters_groups_new = []
+
+        # loop through light_ids to do light hit proximity cut
+        for index, light_id in enumerate(light_ids):
+            tai_ns = f_in['light_events'][light_id]['tai_ns']
+            unix = f_in['light_events'][light_id]['unix']
+            clusters_group = []
+            for i in range(4):
+                for j in range(4):
+                    plot_to_adc_channel = list(plot_to_adc_channel_dict[i].values())[j]
+                    
+                    # this is a summed waveform for one PD tile (sum of 6 SiPMs)
+                    wvfm_sum, tile_position = sum_waveforms(wvfms, channels, plot_to_adc_channel, adc_channel_to_position[i], light_id)
+                    if np.size(wvfm_sum) > 0:
+                        wvfm_max = np.max(wvfm_sum)
+                    else:
+                        wvfm_max = 0
+                    
+                    # only keep events with a summed waveform above the threshold
+                    if wvfm_max > hit_threshold and wvfm_max < hit_upper_bound:
+                        #print(f'light_id = {light_id}; tile position = {tile_position}')
+                        n_light_hits += 1
+                        clusters_event = clusters_groups_selection[index]
+                        if tile_position[2] < 0:
+                            clusters_event = clusters_event[(clusters_event['io_group'] == 1)]
+                        else:
+                            clusters_event = clusters_event[(clusters_event['io_group'] == 2)]
+                        hit_to_clusters_dist = np.sqrt((clusters_event['x_mid'] - tile_position[0])**2 + (clusters_event['y_mid'] - tile_position[1])**2)
+                        
+                        if shape == 'circle':
+                            clusters_mask = (hit_to_clusters_dist < d) & (np.abs(clusters_event['x_mid']) < 315) & (np.abs(clusters_event['y_mid']) < 630)
+                        elif shape == 'ellipse':
+                            clusters_mask = is_point_inside_ellipse(clusters_event['x_mid'], clusters_event['y_mid'], tile_position[0], tile_position[1], d, ellipse_b)
+                        else:
+                            raise ValueError('shape not supported')
+                        
+                        if np.sum(clusters_mask) > 0:
+                            for cluster in clusters_event[clusters_mask]:
+                                if cluster['io_group'] == 1:
+                                    tai_ns_io1.append(tai_ns)
+                                    unix_light_io1.append(tai_ns)
+                                    amplitude_io1.append(np.max(wvfm_sum))
+                                else:
+                                    tai_ns_io2.append(tai_ns)
+                                    unix_light_io2.append(tai_ns)
+                                    amplitude_io2.append(np.max(wvfm_sum))
+                                clusters_group.append(cluster)
+
+            if len(clusters_group) > 0:
+                clusters_groups_new.append(clusters_group)
+                light_ids_new.append(light_id)
+        clusters_groups_selection = clusters_groups_new
+        light_ids = light_ids_new
+    
+    #for i, group in tqdm(enumerate(clusters_groups_selection), desc=f' Total groups = {len(clusters_groups_selection)}'):
+    #    group = np.array(group)
+    #    if np.any(~(((group['y_mid'] >= 304.31) & (group['y_mid'] <= 600)) | ((group['y_mid'] <= 0) & (group['y_mid'] > -295)))):
+            # if near ACLs or corners
+    #        continue
+    #    for cluster in group:
+            
+            
     f_in.close()
 if __name__ == "__main__":
     fire.Fire(apply_data_cuts)
