@@ -228,7 +228,7 @@ def apply_data_cuts(input_config_name, input_filepath):
         light_ids = light_ids[light_ids_mask]
 
         if use_light_proximity_cut:
-            print(f'Applying optical proximity cut with {hit_threshold} hit threshold ...')
+            print(f'Applying optical proximity cut with {hit_threshold} ADC hit-threshold ...')
             wvfms = [f_in['light_events']['voltage_adc1'], f_in['light_events']['voltage_adc2']]
             channels = [f_in['light_events']['channels_adc1'], f_in['light_events']['channels_adc2']]
             plot_to_adc_channel_dict = [io0_left_y_plot_dict, io0_right_y_plot_dict, io1_left_y_plot_dict, io1_right_y_plot_dict]
@@ -308,6 +308,46 @@ def apply_data_cuts(input_config_name, input_filepath):
         f_in.close()
         end_time = time.time()
         print(f'Total elapsed time = {((end_time-start_time)/60):.3f} minutes')
+        
+    # Initialize an empty list to store clusters data
+    clusters_data = []
+    timestamps = []
+
+    # Loop through the files
+    for file_path in input_filepaths:
+        # Extract the timestamp from the file name
+        file_timestamp = file_path.split('charge-light-matched-clusters_')[1].split('.')[0]
+
+        # Open the HDF5 file
+        with h5py.File(file_path, 'r') as file:
+            # Get the clusters dataset from the file
+            clusters_dataset = file['clusters']
+
+            # Add the clusters data to the list
+            clusters_data.append(np.array(clusters_dataset))
+            timestamps.extend([file_timestamp] * len(clusters_dataset))
+
+    # Concatenate all the clusters data
+    combined_clusters_data = np.concatenate(clusters_data, axis=0)
+
+    # Define the new dtype with the 'file_timestamp' field
+    new_dtype = combined_clusters_data.dtype.descr + [('file_timestamp', 'S23')]
+    combined_clusters_data_with_timestamps = np.empty(combined_clusters_data.shape, dtype=new_dtype)
+
+    # Copy the data from the original clusters dataset
+    for field in combined_clusters_data.dtype.names:
+        combined_clusters_data_with_timestamps[field] = combined_clusters_data[field]
+
+    # Add the 'file_timestamp' data
+    combined_clusters_data_with_timestamps['file_timestamp'] = np.array(timestamps, dtype='S23')
+
+    # Create a new HDF5 file to store the combined data
+    output_file_path = f"tagged_clusters_with_cuts_{input_config_name}.h5"
+    with h5py.File(output_file_path, 'w') as output_file:
+        # Create a new dataset for the combined clusters data
+        clusters_dataset = output_file.create_dataset('clusters', data=combined_clusters_data_with_timestamps)
+
+    print(f"Combined clusters with timestamps saved to {output_file_path}")
 if __name__ == "__main__":
     fire.Fire(apply_data_cuts)
 
