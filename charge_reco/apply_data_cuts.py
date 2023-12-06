@@ -19,6 +19,7 @@ from input_config import ModuleConfig
 from typing import List, Dict, Union
 import time
 import sys
+from tqdm import tqdm
 
 def is_point_inside_ellipse(x, y, h, k, a, b):
     """
@@ -88,15 +89,14 @@ def sum_waveforms(wvfms, channels, plot_to_adc_channel_dict, adc_channel_to_posi
     position = position / 6
     return wvfm_sum, position
 
-def apply_data_cuts(input_config_name, input_filepath):
+def apply_data_cuts(input_config_name, *input_filepath):
     
     use_disabled_channels_cut=True
     use_light_proximity_cut=True
     use_fiducial_cut=True
     
     input_filepaths = sys.argv[2:]
-    #if len(input_filepath) == 0:
-    #    input_filepath = [input_filepaths]
+    output_filepaths = []
     for input_filepath in input_filepaths:
         start_time = time.time()
         # check that the input file exists
@@ -104,7 +104,6 @@ def apply_data_cuts(input_config_name, input_filepath):
             raise Exception(f'File {input_filepath} does not exist.')
         else:
             print('Opening file: ', input_filepath)
-
         # open input file 
         f_in = h5py.File(input_filepath, 'r')
 
@@ -117,10 +116,17 @@ def apply_data_cuts(input_config_name, input_filepath):
             f_in['light_events']
         except:
             raise Exception("'light_events' dataset not found in input file.")
-
+        N_files = len(list(input_filepaths))
         data_directory = os.path.dirname(input_filepath)
         output_filepath = input_filepath.split('.')[0] + '_with-cuts' + '.h5'
-
+        
+        if N_files > 1:
+            combined_output_filepath = f"tagged_clusters_with_cuts_{input_config_name}.h5"
+            if os.path.exists(combined_output_filepath):
+                raise Exception('Output file '+ str(combined_output_filepath) + ' already exists.')
+        if os.path.exists(output_filepath):
+            os.remove(output_filepath)
+        output_filepaths.append(output_filepath)
         # Get path for light geometry
         module = ModuleConfig(input_config_name)
         detector = module.detector
@@ -198,7 +204,7 @@ def apply_data_cuts(input_config_name, input_filepath):
 
             print('Culling clusters from noisy channels...')
             # remove 1-hit clusters that come from channel to remove
-            from tqdm import tqdm
+            
             for key in tuples_to_remove:
                 mask = (single_hit_clusters['x_mid'] == key[0]) & (single_hit_clusters['y_mid'] == key[1]) & (single_hit_clusters['z_anode'] == key[2])
                 clusters = clusters[~np.isin(clusters['id'], single_hit_clusters[mask]['id'])]
@@ -307,47 +313,48 @@ def apply_data_cuts(input_config_name, input_filepath):
                 i += 1
         f_in.close()
         end_time = time.time()
-        print(f'Total elapsed time = {((end_time-start_time)/60):.3f} minutes')
+        print(f'Total elapsed time for this file = {((end_time-start_time)/60):.3f} minutes')
         
-    # Initialize an empty list to store clusters data
-    clusters_data = []
-    timestamps = []
+    # only create combined file when there is more than 1 input file
+    if N_files > 1:
+        # Initialize an empty list to store clusters data
+        clusters_data = []
+        timestamps = []
 
-    # Loop through the files
-    for file_path in input_filepaths:
-        # Extract the timestamp from the file name
-        file_timestamp = file_path.split('charge-light-matched-clusters_')[1].split('.')[0]
+        # Loop through the files
+        for file_path in output_filepaths:
+            # Extract the timestamp from the file name
+            file_timestamp = file_path.split('charge-light-matched-clusters_')[1].split('_with-cuts')[0]
 
-        # Open the HDF5 file
-        with h5py.File(file_path, 'r') as file:
-            # Get the clusters dataset from the file
-            clusters_dataset = file['clusters']
+            # Open the HDF5 file
+            with h5py.File(file_path, 'r') as file:
+                # Get the clusters dataset from the file
+                clusters_dataset = file['clusters']
 
-            # Add the clusters data to the list
-            clusters_data.append(np.array(clusters_dataset))
-            timestamps.extend([file_timestamp] * len(clusters_dataset))
+                # Add the clusters data to the list
+                clusters_data.append(np.array(clusters_dataset))
+                timestamps.extend([file_timestamp] * len(clusters_dataset))
 
-    # Concatenate all the clusters data
-    combined_clusters_data = np.concatenate(clusters_data, axis=0)
+        # Concatenate all the clusters data
+        combined_clusters_data = np.concatenate(clusters_data, axis=0)
 
-    # Define the new dtype with the 'file_timestamp' field
-    new_dtype = combined_clusters_data.dtype.descr + [('file_timestamp', 'S23')]
-    combined_clusters_data_with_timestamps = np.empty(combined_clusters_data.shape, dtype=new_dtype)
+        # Define the new dtype with the 'file_timestamp' field
+        new_dtype = combined_clusters_data.dtype.descr + [('file_timestamp', 'S23')]
+        combined_clusters_data_with_timestamps = np.empty(combined_clusters_data.shape, dtype=new_dtype)
 
-    # Copy the data from the original clusters dataset
-    for field in combined_clusters_data.dtype.names:
-        combined_clusters_data_with_timestamps[field] = combined_clusters_data[field]
+        # Copy the data from the original clusters dataset
+        for field in combined_clusters_data.dtype.names:
+            combined_clusters_data_with_timestamps[field] = combined_clusters_data[field]
 
-    # Add the 'file_timestamp' data
-    combined_clusters_data_with_timestamps['file_timestamp'] = np.array(timestamps, dtype='S23')
+        # Add the 'file_timestamp' data
+        combined_clusters_data_with_timestamps['file_timestamp'] = np.array(timestamps, dtype='S23')
 
-    # Create a new HDF5 file to store the combined data
-    output_file_path = f"tagged_clusters_with_cuts_{input_config_name}.h5"
-    with h5py.File(output_file_path, 'w') as output_file:
-        # Create a new dataset for the combined clusters data
-        clusters_dataset = output_file.create_dataset('clusters', data=combined_clusters_data_with_timestamps)
+        # Create a new HDF5 file to store the combined data
+        with h5py.File(data_directory + '/' + combined_output_filepath, 'w') as output_file:
+            # Create a new dataset for the combined clusters data
+            clusters_dataset = output_file.create_dataset('clusters', data=combined_clusters_data_with_timestamps)
 
-    print(f"Combined clusters with timestamps saved to {output_file_path}")
+        print(f"Combined clusters with timestamps saved to {combined_output_filepath}")
 if __name__ == "__main__":
     fire.Fire(apply_data_cuts)
 
