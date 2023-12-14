@@ -9,6 +9,8 @@ v_pedestal_sim = 580
 # set ADC parameters for data
 v_cm_data = 288.28125
 v_ref_data = 1300.78125
+vdda = 1800
+mean_trunc = 3
 
 # Total number of ADC counts
 ADC_COUNTS = 256

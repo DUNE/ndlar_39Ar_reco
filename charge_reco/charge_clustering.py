@@ -13,7 +13,7 @@ import consts
 import loading
 from input_config import ModuleConfig
 
-def run_reconstruction(input_config_name, input_filepath, output_filepath, save_hits=0):
+def run_reconstruction(input_config_name, input_filepath, output_filepath, save_hits=0, pedestal_file=None, vcm_dac=None, vref_dac=None):
     ## main function
     if save_hits:
         save_hits = True
@@ -51,6 +51,12 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
     # detector dictionary file must be pkl file made with larpix_readout_parser
     pixel_xy = loading.load_geom_dict(module)
     pedestal_dict, config_dict = loading.load_pedestal_and_config(module)
+    if pedestal_file is not None:
+        if vcm_dac is None and vref_dac is None:
+            raise Exception('Specify vcm_dac and vref_dac at commandline with --vcm_dac and --vref_dac flags.')
+        print(f'Loading pedestals from {pedestal_file}')
+        pedestal_dict = loading.load_pedestals(pedestal_file, vref_dac, vcm_dac)
+    
     detprop = loading.load_detector_properties(module)
     disabled_channel_IDs = loading.load_disabled_channels_list(module)
     
