@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 
-DET="module-1"
+DET="module-0"
 if [ "${DET}" = "module-0" ]; then
 	data_folder=/global/cfs/cdirs/dune/www/data/Module0/TPC1+2/dataRuns/packetData
-	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module0_reco
+	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module0_reco/39Ar_reco
 elif [ "${DET}" = "module-1" ]; then
 	data_folder=/global/cfs/cdirs/dune/www/data/Module1/TPC12/dataRuns/packetData
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module1_reco/39Ar_reco_09132023
 elif [ "${DET}" = "module-2" ]; then
-	data_folder=/global/cfs/cdirs/dune/www/data/Module2/packetized/TPC12
-	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module2_reco
+	data_folder=/global/cfs/cdirs/dune/users/sfogarty/Module2_reco/39Ar_reco
+    PEDESTAL_FOLDER=/global/cfs/cdirs/dune/www/data/Module2/packetized/TPC12
+	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module2_reco/39Ar_reco
 elif [ "${DET}" = "module-X" ]; then
     data_folder=/global/cfs/cdirs/dune/users/sfogarty/ModuleX_reco
 	OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/ModuleX_reco
@@ -22,9 +23,10 @@ else
 	exit 0
 fi
 
-PKT_FILENAME=packets-2023_10_04_07_55_CEST
+PKT_FILENAME=datalog_2021_04_04_09_38_27_CEST
 INFILENAME=${data_folder}/${PKT_FILENAME}.h5
 OUTFILENAME=${OUTDIR}/${PKT_FILENAME}_clusters.h5
+PEDESTAL_FILE=${PEDESTAL_FOLDER}/Pedestal_varied_pump-binary-2022_11_22_02_36_CET.packet.h5
 
 shifter --image=mjkramer/sim2x2:genie_edep.3_04_00.20230620 --module=None -- /bin/bash << EOF
 set +o posix
@@ -38,8 +40,8 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 cd charge_reco
-python3 charge_clustering.py ${DET} ${INFILENAME} ${OUTFILENAME} --save_hits=True
+python3 charge_clustering.py ${DET} ${INFILENAME} ${OUTFILENAME} --save_hits=False
+
 EOF
-
-
+#--pedestal_file=${PEDESTAL_FILE} --vcm_dac=71 --vref_dac=217
 
