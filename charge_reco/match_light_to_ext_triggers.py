@@ -35,9 +35,13 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     f_adc2 = h5py.File(input_light_files[1], 'r')
     
     # get timestamps for matching
-    tai_ns_adc1 = np.array(f_adc1['time']['tai_ns'])
+    if module.detector == 'module-0':
+        clock_correction_factor = 0.625
+    else:
+        clock_correction_factor = 1
+    tai_ns_adc1 = np.array(f_adc1['time']['tai_ns'])*clock_correction_factor
     unix_adc1 = (np.array(f_adc1['header']['unix']) * 1e-3).astype('i8')
-    tai_ns_adc2 = np.array(f_adc2['time']['tai_ns'])
+    tai_ns_adc2 = np.array(f_adc2['time']['tai_ns'])*clock_correction_factor
     unix_adc2 = (np.array(f_adc2['header']['unix']) * 1e-3).astype('i8')
     tai_ns_tolerance = 1000
     unix_tolerance = 1
