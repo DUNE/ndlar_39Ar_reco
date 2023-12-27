@@ -208,7 +208,11 @@ def apply_data_cuts(input_config_name, *input_filepath):
             for key in tuples_to_remove:
                 mask = (single_hit_clusters['x_mid'] == key[0]) & (single_hit_clusters['y_mid'] == key[1]) & (single_hit_clusters['z_anode'] == key[2])
                 clusters = clusters[~np.isin(clusters['id'], single_hit_clusters[mask]['id'])]
-
+            # clear memory before moving on
+            combined_dstack=0
+            single_hit_clusters=0
+            mask=0
+            count_dict=0
         print(' ')
         print('Grouping clusters by light event ...')
         # group clusters by light event
