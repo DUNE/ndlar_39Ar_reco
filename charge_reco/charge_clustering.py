@@ -92,6 +92,9 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
     z_drift_factor = 10*consts.v_drift/1e3
     dbscan = DBSCAN(min_samples=min_samples, eps=eps)
     
+    nClusters = 0
+    nClusters_Matched = 0
+    
     for i in tqdm(range(batches_limit), desc = ' Processing batches...'):
         batch_start_time = time.time()
         
@@ -150,6 +153,9 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
             with h5py.File(output_events_filename, 'a') as output_file:
                 output_file.create_dataset('clusters', data=clusters, maxshape=(None,))
                 # making sure to continously increment cluster_index as we go onto the next batch
+                nClusters += len(clusters)
+                nClusters_Matched += np.sum(clusters['ext_trig_index'] != -1)
+                print(f'Fraction of clusters matched to ext trigger for this batch: {nClusters_Matched/nClusters}')
                 max_cluster_index += len(clusters)-1
                 if save_hits:
                     output_file.create_dataset('hits', data=hits, maxshape=(None,))
@@ -157,6 +163,9 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
         else:
             # add new results to hdf5 file
             with h5py.File(output_events_filename, 'a') as f:
+                nClusters += len(clusters)
+                nClusters_Matched += np.sum(clusters['ext_trig_index'] != -1)
+                print(f'Fraction of clusters matched to ext trigger for this batch: {nClusters_Matched/nClusters}')
                 f['clusters'].resize((f['clusters'].shape[0] + clusters.shape[0]), axis=0)
                 f['clusters'][-clusters.shape[0]:] = clusters
                 max_cluster_index += len(clusters)-1
@@ -181,6 +190,8 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
                 matching_total_time = matching_end_time - matching_start_time
                 print(f"Ext trigger matching took {matching_total_time:.3f} seconds, and {(matching_total_time/batch_total_time  * 100):.3f}% of the total time.")
             print(' ')
+    if module.match_charge_to_ext_trig:
+        print(f'Fraction of clusters matched to ext trigger: {nClusters_Matched/nClusters}')
     print('Saving reconstruction results to ', output_events_filename)
     analysis_end = time.time()
     print(f'Time to do full analysis = {((analysis_end-analysis_start)/60):.3f} minutes')
