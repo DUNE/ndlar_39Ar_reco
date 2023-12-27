@@ -37,11 +37,14 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     # get timestamps for matching
     if module.detector == 'module-0':
         clock_correction_factor = 0.625
+        tai_ns_adc1 = np.array(f_adc1['time']['tai_ns']*clock_correction_factor + f_adc1['time']['tai_s']*1e9)
+        tai_ns_adc2 = np.array(f_adc2['time']['tai_ns']*clock_correction_factor + f_adc2['time']['tai_s']*1e9)
     else:
         clock_correction_factor = 1
-    tai_ns_adc1 = np.array(f_adc1['time']['tai_ns'])*clock_correction_factor
+        tai_ns_adc1 = np.array(f_adc1['time']['tai_ns'])*clock_correction_factor
+        tai_ns_adc2 = np.array(f_adc2['time']['tai_ns'])*clock_correction_factor
+
     unix_adc1 = (np.array(f_adc1['header']['unix']) * 1e-3).astype('i8')
-    tai_ns_adc2 = np.array(f_adc2['time']['tai_ns'])*clock_correction_factor
     unix_adc2 = (np.array(f_adc2['header']['unix']) * 1e-3).astype('i8')
     tai_ns_tolerance = 1000
     unix_tolerance = 1
@@ -59,10 +62,11 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     light_event_indices = np.zeros(len(clusters), dtype='i8')
     
     samples = module.samples
+    nchannels = module.nchannels
     light_events_dtype = np.dtype([('id', '<i4'), ('tai_ns', '<i8'), \
-                                   ('unix', '<i8'), ('channels_adc1', 'u1', (24,)), \
-                                   ('channels_adc2', 'u1', (24,)), \
-                                    ('voltage_adc1', 'i4', (24, samples)), ('voltage_adc2', 'i4', (24, samples))])
+                                   ('unix', '<i8'), ('channels_adc1', 'u1', (nchannels,)), \
+                                   ('channels_adc2', 'u1', (nchannels,)), \
+                                    ('voltage_adc1', 'i4', (nchannels, samples)), ('voltage_adc2', 'i4', (nchannels, samples))])
     light_events_all = np.zeros((0,), dtype=light_events_dtype)
     
     batch_size = 500
@@ -77,7 +81,11 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
         # only match to ext triggers if there is an event in each ADC
         if np.sum(light_match_mask) == 1:
             light_event = np.zeros((1,), dtype=light_events_dtype)
-            light_tai_ns = (float(tai_ns_adc1[i]) + float(f_adc2['time'][light_match_mask]['tai_ns'][0]))/2 
+            clock_correction_factor = 0.625
+            if module.detector == 'module-0':
+                light_tai_ns = (float(tai_ns_adc1[i]) + float(f_adc2['time'][light_match_mask]['tai_ns'][0] + f_adc2['time'][light_match_mask]['tai_s'][0]*1e9 ) * clock_correction_factor)/2 
+            else:
+                light_tai_ns = (float(tai_ns_adc1[i]) + float(f_adc2['time'][light_match_mask]['tai_ns'][0]))/2 
             light_unix_s = unix_adc1[i]
             
             # match light trig to external triggers
@@ -114,14 +122,16 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                 ext_trig_index = np.where(isMatch)[0]
                 np.put(light_event_indices, np.where(clusters['ext_trig_index'] == ext_trig_index)[0], light_index)
                 light_index += 1
-                
+                #print('batch_index=', batch_index)
                 if batch_index > batch_size and first_batch:
+                    #print('Saving first batch:')
                     first_batch = False
                     with h5py.File(output_filename, 'a') as output_file:
                         output_file.create_dataset('light_events', data=light_events_all, maxshape=(None,))
                     light_events_all = np.zeros((0,), dtype=light_events_dtype)
                     batch_index = 0
                 elif batch_index > batch_size and not first_batch:
+                    #print('Saving batch:')
                     with h5py.File(output_filename, 'a') as output_file:
                         output_file['light_events'].resize((output_file['light_events'].shape[0] + light_events_all.shape[0]), axis=0)
                         output_file['light_events'][-light_events_all.shape[0]:] = light_events_all
