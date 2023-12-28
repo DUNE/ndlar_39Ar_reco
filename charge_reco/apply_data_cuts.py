@@ -73,19 +73,20 @@ def get_detector_position(adc: int, channel: int, geometry_data: Dict) -> Union[
     
     return [x, y, z]
 
-def sum_waveforms(wvfms, channels, plot_to_adc_channel_dict, adc_channel_to_position, light_id):
+def sum_waveforms(wvfms, channels, plot_to_adc_channel_dict, adc_channel_to_position, light_id, pedestal_range):
     # Sum the waveforms in a particular tile in a particular event
     position = np.array([0.0, 0.0, 0.0])
+    
     for j, adc_ch in enumerate(plot_to_adc_channel_dict):
             position += np.array(adc_channel_to_position[adc_ch])
             if j==0:
                 wvfm_sum = np.array(wvfms[adc_ch[0]][light_id])[channels[adc_ch[0]][light_id] == adc_ch[1]]
                 if np.size(wvfm_sum) > 0:
-                    wvfm_sum -= np.mean(wvfm_sum[0][600:1000]).astype('int16')
+                    wvfm_sum -= np.mean(wvfm_sum[0][pedestal_range[0]:pedestal_range[1]]).astype('int16')
             else:
                 wvfm = np.array(wvfms[adc_ch[0]][light_id])[channels[adc_ch[0]][light_id] == adc_ch[1]]
                 if np.size(wvfm) > 0:
-                    wvfm_sum = wvfm_sum + wvfm[0] - np.mean(wvfm[0][600:1000]).astype('int16')
+                    wvfm_sum = wvfm_sum + wvfm[0] - np.mean(wvfm[0][pedestal_range[0]:pedestal_range[1]]).astype('int16')
     position = position / 6
     return wvfm_sum, position
 
@@ -133,13 +134,63 @@ def apply_data_cuts(input_config_name, *input_filepath):
         light_geometry_path = module.light_det_geom_path
         light_geometry = loading.load_light_geometry(light_geometry_path)
 
+        # plot index to list of (adc, channel) combos that correspond to a full PD tile
+        if input_config_name == 'module-0':
+            # plot index to list of (adc, channel) combos that correspond to a full PD tile
+            io0_left_y_plot_dict = {0: [(0, 30),(0, 29),(0, 28),(0, 27),(0, 26),(0, 25)], \
+                                   1: [(0, 23),(0, 22),(0, 21),(0, 20),(0, 19),(0, 18)], \
+                                   2: [(0, 14),(0, 13),(0, 12),(0, 11),(0, 10),(0, 9)], \
+                                   3: [(0, 7),(0, 6),(0, 5),(0, 4),(0, 3),(0, 2)]}
+
+            io0_right_y_plot_dict = {0: [(1, 62),(1, 61),(1, 60),(1, 59),(1, 58),(1, 57)], \
+                                   1: [(1, 55),(1, 54),(1, 53),(1, 52),(1, 51),(1, 50)], \
+                                   2: [(1, 46),(1, 45),(1, 44),(1, 43),(1, 42),(1, 41)], \
+                                   3: [(1, 39),(1, 38),(1, 37),(1, 36),(1, 35),(1, 34)]}
+
+            io1_left_y_plot_dict = {0: [(1, 30),(1, 29),(1, 28),(1, 27),(1, 26),(1, 25)], \
+                                   1: [(1, 23),(1, 22),(1, 21),(1, 20),(1, 19),(1, 18)], \
+                                   2: [(1, 14),(1, 13),(1, 12),(1, 11),(1, 10),(1, 9)], \
+                                   3: [(1, 7),(1, 6),(1, 5),(1, 4),(0, 3),(1, 2)]}
+
+            io1_right_y_plot_dict = {0: [(0, 62),(0, 61),(0, 60),(0, 59),(0, 58),(0, 57)], \
+                                   1: [(0, 55),(0, 54),(0, 53),(0, 52),(0, 51),(0, 50)], \
+                                   2: [(0, 46),(0, 45),(0, 44),(0, 43),(0, 42),(0, 41)], \
+                                   3: [(0, 39),(0, 38),(0, 37),(0, 36),(0, 35),(0, 34)]}
+            rows_to_use = [0,2]
+            pedestal_range = (200, 250)
+            channel_range = (1, 63)
+        else:
+            # plot index to list of (adc, channel) combos that correspond to a full PD tile
+            io0_left_y_plot_dict = {0: [(1, 15),(1, 14),(1, 13),(1, 12),(1, 11),(1, 10)], \
+                                   1: [(0, 15),(0, 14),(0, 13),(0, 12),(0, 11),(0, 10)], \
+                                   2: [(1, 9),(1, 8),(1, 7),(1, 6),(1, 5),(1, 4)], \
+                                   3: [(0, 9),(0, 8),(0, 7),(0, 6),(0, 5),(0, 4)]}
+
+            io0_right_y_plot_dict = {0: [(1, 31),(1, 30),(1, 29),(1, 28),(1, 27),(1, 26)], \
+                                   1: [(0, 31),(0, 30),(0, 29),(0, 28),(0, 27),(0, 26)], \
+                                   2: [(1, 25),(1, 24),(1, 23),(1, 22),(1, 21),(1, 20)], \
+                                   3: [(0, 25),(0, 24),(0, 23),(0, 22),(0, 21),(0, 20)]}
+
+            io1_left_y_plot_dict = {0: [(1, 63),(1, 62),(1, 61),(1, 60),(1, 59),(1, 58)], \
+                                   1: [(0, 63),(0, 62),(0, 61),(0, 60),(0, 59),(0, 58)], \
+                                   2: [(1, 57),(1, 56),(1, 55),(1, 54),(1, 53),(1, 52)], \
+                                   3: [(0, 57),(0, 56),(0, 55),(0, 54),(0, 53),(0, 52)]}
+
+            io1_right_y_plot_dict = {0: [(1, 47),(1, 46),(1, 45),(1, 44),(1, 43),(1, 42)], \
+                                   1: [(0, 47),(0, 46),(0, 45),(0, 44),(0, 43),(0, 42)], \
+                                   2: [(1, 41),(1, 40),(1, 39),(1, 38),(1, 37),(1, 36)], \
+                                   3: [(0, 41),(0, 40),(0, 39),(0, 38),(0, 37),(0, 36)]}
+            rows_to_use = [0,1,2,3]
+            pedestal_range = (600, 1000)
+            channel_range = (4, 64)
+        
         # make dictionaries of (adc_num, channel_num) keys with positions
         io0_dict_left = {} 
         io0_dict_right = {} 
         io1_dict_left = {}
         io1_dict_right = {}
         for adc_id in range(0,2):
-            for channel_id in range(4, 64):
+            for channel_id in range(channel_range[0], channel_range[1]):
                 position = get_detector_position(adc_id, channel_id, light_geometry)
                 if position is not None:
                     if position[2] < 0 and position[0] < 0:
@@ -150,27 +201,6 @@ def apply_data_cuts(input_config_name, *input_filepath):
                         io1_dict_left[(adc_id, channel_id)] = position
                     elif position[2] > 0 and position[0] > 0:
                         io1_dict_right[(adc_id, channel_id)] = position
-
-        # plot index to list of (adc, channel) combos that correspond to a full PD tile
-        io0_left_y_plot_dict = {0: [(1, 15),(1, 14),(1, 13),(1, 12),(1, 11),(1, 10)], \
-                               1: [(0, 15),(0, 14),(0, 13),(0, 12),(0, 11),(0, 10)], \
-                               2: [(1, 9),(1, 8),(1, 7),(1, 6),(1, 5),(1, 4)], \
-                               3: [(0, 9),(0, 8),(0, 7),(0, 6),(0, 5),(0, 4)]}
-
-        io0_right_y_plot_dict = {0: [(1, 31),(1, 30),(1, 29),(1, 28),(1, 27),(1, 26)], \
-                               1: [(0, 31),(0, 30),(0, 29),(0, 28),(0, 27),(0, 26)], \
-                               2: [(1, 25),(1, 24),(1, 23),(1, 22),(1, 21),(1, 20)], \
-                               3: [(0, 25),(0, 24),(0, 23),(0, 22),(0, 21),(0, 20)]}
-
-        io1_left_y_plot_dict = {0: [(1, 63),(1, 62),(1, 61),(1, 60),(1, 59),(1, 58)], \
-                               1: [(0, 63),(0, 62),(0, 61),(0, 60),(0, 59),(0, 58)], \
-                               2: [(1, 57),(1, 56),(1, 55),(1, 54),(1, 53),(1, 52)], \
-                               3: [(0, 57),(0, 56),(0, 55),(0, 54),(0, 53),(0, 52)]}
-
-        io1_right_y_plot_dict = {0: [(1, 47),(1, 46),(1, 45),(1, 44),(1, 43),(1, 42)], \
-                               1: [(0, 47),(0, 46),(0, 45),(0, 44),(0, 43),(0, 42)], \
-                               2: [(1, 41),(1, 40),(1, 39),(1, 38),(1, 37),(1, 36)], \
-                               3: [(0, 41),(0, 40),(0, 39),(0, 38),(0, 37),(0, 36)]}
 
         # parameters for cuts
         N = 5 # clusters allowed in drift window
@@ -191,7 +221,10 @@ def apply_data_cuts(input_config_name, *input_filepath):
             try:
                 clusters_file = h5py.File(data_directory+'/packet_'+timestamp+'_clusters.h5','r')
             except:
-                clusters_file = h5py.File(data_directory+'/packets-'+timestamp+'_clusters.h5','r')
+                try:
+                    clusters_file = h5py.File(data_directory+'/packets-'+timestamp+'_clusters.h5','r')
+                except:
+                    clusters_file = h5py.File(data_directory+'/datalog_'+timestamp+'_clusters.h5','r')
             single_hit_clusters = clusters_file['clusters'][clusters_file['clusters']['nhit'] == 1]
             combined_dstack = np.dstack((single_hit_clusters['x_mid'], single_hit_clusters['y_mid'], single_hit_clusters['z_anode']))[0]
 
@@ -256,41 +289,42 @@ def apply_data_cuts(input_config_name, *input_filepath):
                 clusters_group = []
                 for i in range(4):
                     for j in range(4):
-                        plot_to_adc_channel = list(plot_to_adc_channel_dict[i].values())[j]
+                        if j in rows_to_use:
+                            plot_to_adc_channel = list(plot_to_adc_channel_dict[i].values())[j]
 
-                        # this is a summed waveform for one PD tile (sum of 6 SiPMs)
-                        wvfm_sum, tile_position = sum_waveforms(wvfms, channels, plot_to_adc_channel, adc_channel_to_position[i], light_id)
-                        if np.size(wvfm_sum) > 0:
-                            wvfm_max = np.max(wvfm_sum)
-                        else:
-                            wvfm_max = 0
-
-                        # only keep events with a summed waveform above the threshold
-                        if wvfm_max > hit_threshold and wvfm_max < hit_upper_bound:
-                            #print(f'light_id = {light_id}; tile position = {tile_position}')
-                            n_light_hits += 1
-                            clusters_event = clusters_groups_selection[index]
-                            if tile_position[2] < 0:
-                                clusters_event = clusters_event[(clusters_event['io_group'] == 1)]
+                            # this is a summed waveform for one PD tile (sum of 6 SiPMs)
+                            wvfm_sum, tile_position = sum_waveforms(wvfms, channels, plot_to_adc_channel, adc_channel_to_position[i], light_id, pedestal_range)
+                            if np.size(wvfm_sum) > 0:
+                                wvfm_max = np.max(wvfm_sum)
                             else:
-                                clusters_event = clusters_event[(clusters_event['io_group'] == 2)]
-                            hit_to_clusters_dist = np.sqrt((clusters_event['x_mid'] - tile_position[0])**2 + (clusters_event['y_mid'] - tile_position[1])**2)
+                                wvfm_max = 0
 
-                            if opt_cut_shape == 'circle':
-                                clusters_mask = (hit_to_clusters_dist < d) & (np.abs(clusters_event['x_mid']) < 315) & (np.abs(clusters_event['y_mid']) < 630)
-                            elif opt_cut_shape == 'ellipse':
-                                clusters_mask = is_point_inside_ellipse(clusters_event['x_mid'], clusters_event['y_mid'], tile_position[0], tile_position[1], d, ellipse_b)
-                            else:
-                                raise ValueError('shape not supported')
+                            # only keep events with a summed waveform above the threshold
+                            if wvfm_max > hit_threshold and wvfm_max < hit_upper_bound:
+                                #print(f'light_id = {light_id}; tile position = {tile_position}')
+                                n_light_hits += 1
+                                clusters_event = clusters_groups_selection[index]
+                                if tile_position[2] < 0:
+                                    clusters_event = clusters_event[(clusters_event['io_group'] == 1)]
+                                else:
+                                    clusters_event = clusters_event[(clusters_event['io_group'] == 2)]
+                                hit_to_clusters_dist = np.sqrt((clusters_event['x_mid'] - tile_position[0])**2 + (clusters_event['y_mid'] - tile_position[1])**2)
 
-                            if np.sum(clusters_mask) > 0:
-                                group = clusters_event[clusters_mask]
-                                if np.any(~(((group['y_mid'] >= 304.31) & (group['y_mid'] <= 600)) 
-                                            | ((group['y_mid'] <= 0) & (group['y_mid'] > -295)))):
-                                    # if near ACLs or corners
-                                    continue
-                                for cluster in clusters_event[clusters_mask]:                                
-                                    clusters_group.append(cluster)
+                                if opt_cut_shape == 'circle':
+                                    clusters_mask = (hit_to_clusters_dist < d) & (np.abs(clusters_event['x_mid']) < 315) & (np.abs(clusters_event['y_mid']) < 630)
+                                elif opt_cut_shape == 'ellipse':
+                                    clusters_mask = is_point_inside_ellipse(clusters_event['x_mid'], clusters_event['y_mid'], tile_position[0], tile_position[1], d, ellipse_b)
+                                else:
+                                    raise ValueError('shape not supported')
+
+                                if np.sum(clusters_mask) > 0:
+                                    group = clusters_event[clusters_mask]
+                                    if np.any(~(((group['y_mid'] >= 304.31) & (group['y_mid'] <= 600)) 
+                                                | ((group['y_mid'] <= 0) & (group['y_mid'] > -295)))):
+                                        # if near ACLs or corners
+                                        continue
+                                    for cluster in clusters_event[clusters_mask]:                                
+                                        clusters_group.append(cluster)
                 index += 1                    
                 if len(clusters_group) > 0:
                     clusters_groups_new.append(clusters_group)
