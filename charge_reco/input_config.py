@@ -10,6 +10,7 @@ class ModuleConfig:
             self.detector = 'module-0'
             self.data_type = 'data'
             self.detector_dict_path = 'charge_layout/module0_multi_tile_layout-2.3.16.yaml'
+            self.light_det_geom_path = 'light_layout/light_module_desc-0.0.0.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
             self.use_disabled_channels_list = False
             self.disabled_channels_list = 'disabled_channels/module0_disabled_channels_noise_cut.npz'
