@@ -15,11 +15,7 @@ from input_config import ModuleConfig
 
 def run_reconstruction(input_config_name, input_filepath, output_filepath, save_hits=False, match_to_ext_trig=True, pedestal_file=None, vcm_dac=None, vref_dac=None):
     ## main function
-    #if save_hits:
-    #    save_hits = True
-    #else:
-    #    save_hits = False
-    
+
     # Get input variables. Get variables with module.<variable>
     module = ModuleConfig(input_config_name)
     
@@ -113,7 +109,6 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
             clusters, ext_trig, hits, benchmarks = results
         else:
             clusters, ext_trig, benchmarks = results
-        #clusters, ext_trig, hits, benchmarks
         analysis_end_time = time.time()
         
         list_of_trigs = []
@@ -137,7 +132,6 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
                         z_drift_shift = hits_this_cluster['z_drift']*(hits_this_cluster['t'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
                         z_drift = hits_this_cluster['z_anode'] + z_drift_shift
                         np.put(hits['z_drift'], np.where(hits_this_cluster_mask)[0], z_drift)
-                    #print(f"z_anode = {clusters[cluster_index]['z_anode']}; direction = {clusters[cluster_index]['z_drift_min']}; delta z = {clusters[cluster_index]['z_drift_min']*(clusters[cluster_index]['t_min'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor}")
                     # calculate drift coordinate for clusters
                     z_drift_min = clusters[cluster_index]['z_anode'] + clusters[cluster_index]['z_drift_min']*(clusters[cluster_index]['t_min'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
                     z_drift_mid = clusters[cluster_index]['z_anode'] + clusters[cluster_index]['z_drift_mid']*(clusters[cluster_index]['t_mid'] - clusters[cluster_index]['t0']).astype('f8')*z_drift_factor
@@ -156,9 +150,9 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
                 # making sure to continously increment cluster_index as we go onto the next batch
                 nClusters += len(clusters)
                 nClusters_Matched += np.sum(clusters['ext_trig_index'] != -1)
-                print(f'Fraction of clusters matched to ext trigger for this batch: {nClusters_Matched/nClusters}')
+                #print(f'Fraction of clusters matched to ext trigger for this batch: {nClusters_Matched/nClusters}')
                 fracMatch = len(np.unique(clusters['ext_trig_index']))/len(ext_trig)
-                print(f"Fraction of ext triggers with matched clusters: {fracMatch}")
+                #print(f"Fraction of ext triggers with matched clusters: {fracMatch}")
                 max_cluster_index += len(clusters)-1
                 if save_hits:
                     output_file.create_dataset('hits', data=hits, maxshape=(None,))
@@ -169,9 +163,9 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
             with h5py.File(output_events_filename, 'a') as f:
                 nClusters += len(clusters)
                 nClusters_Matched += np.sum(clusters['ext_trig_index'] != -1)
-                print(f'Fraction of clusters matched to ext trigger for this batch: {nClusters_Matched/nClusters}')
+                #print(f'Fraction of clusters matched to ext trigger for this batch: {nClusters_Matched/nClusters}')
                 fracMatch = len(np.unique(clusters['ext_trig_index']))/len(ext_trig)
-                print(f"Fraction of ext triggers with matched clusters: {fracMatch}")
+                #print(f"Fraction of ext triggers with matched clusters: {fracMatch}")
                 f['clusters'].resize((f['clusters'].shape[0] + clusters.shape[0]), axis=0)
                 f['clusters'][-clusters.shape[0]:] = clusters
                 max_cluster_index += len(clusters)-1
