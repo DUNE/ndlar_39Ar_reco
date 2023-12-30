@@ -13,12 +13,13 @@ import consts
 import loading
 from input_config import ModuleConfig
 
-def run_reconstruction(input_config_name, input_filepath, output_filepath, save_hits=0, pedestal_file=None, vcm_dac=None, vref_dac=None):
+def run_reconstruction(input_config_name, input_filepath, output_filepath, save_hits=0, match_to_ext_trig=True, pedestal_file=None, vcm_dac=None, vref_dac=None):
     ## main function
     if save_hits:
         save_hits = True
     else:
         save_hits = False
+    
     # Get input variables. Get variables with module.<variable>
     module = ModuleConfig(input_config_name)
     
@@ -118,7 +119,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
         list_of_trigs = []
         # match clusters to external triggers
         matching_start_time = time.time()
-        if module.match_charge_to_ext_trig:
+        if match_to_ext_trig:
             for j, trig in enumerate(ext_trig):
                 # match clusters to ext triggers
                 matched_clusters_mask = (clusters['t_min'] > trig['t'] - lower_PPS_window) & \
@@ -156,23 +157,28 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
                 nClusters += len(clusters)
                 nClusters_Matched += np.sum(clusters['ext_trig_index'] != -1)
                 print(f'Fraction of clusters matched to ext trigger for this batch: {nClusters_Matched/nClusters}')
+                fracMatch = len(np.unique(clusters['ext_trig_index']))/len(ext_trig)
+                print(f"Fraction of ext triggers with matched clusters: {fracMatch}")
                 max_cluster_index += len(clusters)-1
                 if save_hits:
                     output_file.create_dataset('hits', data=hits, maxshape=(None,))
-                output_file.create_dataset('ext_trig', data=ext_trig, maxshape=(None,))
+                if match_to_ext_trig:
+                    output_file.create_dataset('ext_trig', data=ext_trig, maxshape=(None,))
         else:
             # add new results to hdf5 file
             with h5py.File(output_events_filename, 'a') as f:
                 nClusters += len(clusters)
                 nClusters_Matched += np.sum(clusters['ext_trig_index'] != -1)
                 print(f'Fraction of clusters matched to ext trigger for this batch: {nClusters_Matched/nClusters}')
+                fracMatch = len(np.unique(clusters['ext_trig_index']))/len(ext_trig)
+                print(f"Fraction of ext triggers with matched clusters: {fracMatch}")
                 f['clusters'].resize((f['clusters'].shape[0] + clusters.shape[0]), axis=0)
                 f['clusters'][-clusters.shape[0]:] = clusters
                 max_cluster_index += len(clusters)-1
                 if save_hits:
                     f['hits'].resize((f['hits'].shape[0] + hits.shape[0]), axis=0)
                     f['hits'][-hits.shape[0]:] = hits
-                if len(ext_trig) > 0:
+                if len(ext_trig) > 0 and match_to_ext_trig:
                     f['ext_trig'].resize((f['ext_trig'].shape[0] + ext_trig.shape[0]), axis=0)
                     f['ext_trig'][-ext_trig.shape[0]:] = ext_trig
                 
