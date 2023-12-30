@@ -13,12 +13,12 @@ import consts
 import loading
 from input_config import ModuleConfig
 
-def run_reconstruction(input_config_name, input_filepath, output_filepath, save_hits=0, match_to_ext_trig=True, pedestal_file=None, vcm_dac=None, vref_dac=None):
+def run_reconstruction(input_config_name, input_filepath, output_filepath, save_hits=False, match_to_ext_trig=True, pedestal_file=None, vcm_dac=None, vref_dac=None):
     ## main function
-    if save_hits:
-        save_hits = True
-    else:
-        save_hits = False
+    #if save_hits:
+    #    save_hits = True
+    #else:
+    #    save_hits = False
     
     # Get input variables. Get variables with module.<variable>
     module = ModuleConfig(input_config_name)
