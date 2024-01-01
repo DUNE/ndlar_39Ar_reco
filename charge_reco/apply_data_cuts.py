@@ -203,14 +203,12 @@ def apply_data_cuts(input_config_name, *input_filepath):
                         io1_dict_right[(adc_id, channel_id)] = position
 
         # parameters for cuts
-        N = 5 # clusters allowed in drift window
-        x = 10 # max hits per cluster allowed
-        d = 150 # mm, max distance of cluster from light hit
+        d = 80 # mm, max distance of cluster from light hit
         hit_threshold = 1000
         hit_upper_bound = 1e9
         rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
-        opt_cut_shape = 'ellipse' # proximity cut type. Other option: 'circle'.
-        ellipse_b = 175 # mm
+        opt_cut_shape = 'rect' # proximity cut type. Options: 'ellipse', 'circle', 'rect'.
+        ellipse_b = 100 # mm
         clusters = np.array(f_in['clusters'])
         clusters_groups_selection = []
 
@@ -247,29 +245,9 @@ def apply_data_cuts(input_config_name, *input_filepath):
             mask=0
             count_dict=0
         print(' ')
-        print('Grouping clusters by light event ...')
-        # group clusters by light event
-        light_ids = np.array(clusters['ext_trig_index'])
-        sorted_indices = np.argsort(light_ids)
-        light_ids = light_ids[sorted_indices]
-        clusters = clusters[sorted_indices]
-        light_trig_indices = np.concatenate(([0], np.flatnonzero(light_ids[:-1] != light_ids[1:])+1, [len(light_ids)]))
-        grouped_clusters = np.split(clusters, light_trig_indices[1:-1])
-        light_ids = np.unique(light_ids)
-
-        # make event selection based on number of clusters allowed in event and number of hits allowed per cluster
-        print(f'Selecting events with < {N+1} clusters in event and < {x+1} hits per cluster ...')
-        total_clusters = 0
-        light_ids_mask = np.zeros(len(light_ids), dtype=bool)
-        i = 0
-        for group in tqdm(grouped_clusters):
-            if len(group) <= N and np.all(group['nhit'] <= x): 
-                total_clusters += len(group)
-                clusters_groups_selection.append(group)
-                light_ids_mask[i] = True
-            i += 1
-        light_ids = light_ids[light_ids_mask]
-
+        
+        light_ids = np.array(clusters['light_trig_index'])
+        clusters_mask = np.zeros(len(clusters), dtype=bool)
         if use_light_proximity_cut:
             print(f'Applying optical proximity cut with {hit_threshold} ADC hit-threshold ...')
             wvfms = [f_in['light_events']['voltage_adc1'], f_in['light_events']['voltage_adc2']]
@@ -277,16 +255,15 @@ def apply_data_cuts(input_config_name, *input_filepath):
             plot_to_adc_channel_dict = [io0_left_y_plot_dict, io0_right_y_plot_dict, io1_left_y_plot_dict, io1_right_y_plot_dict]
             adc_channel_to_position = [io0_dict_left, io0_dict_right, io1_dict_left, io1_dict_right]
 
-            n_light_hits = 0
-            light_ids_new = []
-            clusters_groups_new = []
-
             # loop through light_ids to do light hit proximity cut
             index = 0
-            for light_id in tqdm(light_ids, desc=' Looping through events: '):
-                #tai_ns = f_in['light_events'][light_id]['tai_ns']
-                #unix = f_in['light_events'][light_id]['unix']
-                clusters_group = []
+            for light_id_list in tqdm(light_ids, desc=' Looping through clusters: '):
+                ns_diff = []
+                for j, idx in enumerate(light_id_list[light_id_list != -1]):
+                    ns_diff.append(abs(f_in['light_events'][idx]['tai_ns'] - clusters[index]['t_mid']))
+                light_id = light_id_list[np.argmin(ns_diff)]
+                
+                cluster_keep = 0
                 for i in range(4):
                     for j in range(4):
                         if j in rows_to_use:
@@ -301,57 +278,53 @@ def apply_data_cuts(input_config_name, *input_filepath):
 
                             # only keep events with a summed waveform above the threshold
                             if wvfm_max > hit_threshold and wvfm_max < hit_upper_bound:
-                                #print(f'light_id = {light_id}; tile position = {tile_position}')
-                                n_light_hits += 1
-                                clusters_event = clusters_groups_selection[index]
-                                if tile_position[2] < 0:
-                                    clusters_event = clusters_event[(clusters_event['io_group'] == 1)]
+                                cluster = clusters[index]
+                                # don't compare a wvfm in tpc1 to a cluster in tpc2, vice versa
+                                if tile_position[2] < 0 and cluster['io_group'] == 2:
+                                    continue
+                                elif tile_position[2] > 0 and cluster['io_group'] == 1:
+                                    continue
                                 else:
-                                    clusters_event = clusters_event[(clusters_event['io_group'] == 2)]
-                                hit_to_clusters_dist = np.sqrt((clusters_event['x_mid'] - tile_position[0])**2 + (clusters_event['y_mid'] - tile_position[1])**2)
+                                    pass
+                                hit_to_clusters_dist = np.sqrt((cluster['x_mid'] - tile_position[0])**2 + (cluster['y_mid'] - tile_position[1])**2)
 
                                 if opt_cut_shape == 'circle':
-                                    clusters_mask = (hit_to_clusters_dist < d) & (np.abs(clusters_event['x_mid']) < 315) & (np.abs(clusters_event['y_mid']) < 630)
+                                    cluster_in_shape = (hit_to_clusters_dist < d) & (abs(cluster['x_mid']) < 315) & (abs(cluster['y_mid']) < 630)
                                 elif opt_cut_shape == 'ellipse':
-                                    clusters_mask = is_point_inside_ellipse(clusters_event['x_mid'], clusters_event['y_mid'], tile_position[0], tile_position[1], d, ellipse_b)
+                                    cluster_in_shape = is_point_inside_ellipse(cluster['x_mid'], cluster['y_mid'], tile_position[0], tile_position[1], d, ellipse_b)
+                                elif opt_cut_shape == 'rect':
+                                    if  tile_position[0] < 0 \
+                                        and cluster['x_mid'] < tile_position[0]+d \
+                                        and cluster['y_mid'] > tile_position[1]-304/2 \
+                                        and cluster['y_mid'] < tile_position[1]+304/2:
+                                        cluster_in_shape = True
+                                    elif  tile_position[0] > 0 \
+                                        and cluster['x_mid'] > tile_position[0]-d \
+                                        and cluster['y_mid'] > tile_position[1]-304/2 \
+                                        and cluster['y_mid'] < tile_position[1]+304/2:
+                                        cluster_in_shape = True
+                                    else:
+                                        cluster_in_shape = False
                                 else:
                                     raise ValueError('shape not supported')
 
-                                if np.sum(clusters_mask) > 0:
-                                    group = clusters_event[clusters_mask]
-                                    if np.any(~(((group['y_mid'] >= 304.31) & (group['y_mid'] <= 600)) 
-                                                | ((group['y_mid'] <= 0) & (group['y_mid'] > -295)))):
+                                if cluster_in_shape:
+                                    if np.any(~(((cluster['y_mid'] >= 304.31) & (cluster['y_mid'] <= 600)) 
+                                                | ((cluster['y_mid'] <= 0) & (cluster['y_mid'] > -295)))):
                                         # if near ACLs or corners
                                         continue
-                                    for cluster in clusters_event[clusters_mask]:                                
-                                        clusters_group.append(cluster)
-                index += 1                    
-                if len(clusters_group) > 0:
-                    clusters_groups_new.append(clusters_group)
-                    light_ids_new.append(light_id)
-            clusters_groups_selection = clusters_groups_new
-            light_ids = light_ids_new
-
-            # Loop through remaining clusters groups and add to new output file.
-            # Note that we are not saving the light data again. Use `ext_trig_index` to refer
-            # to the light data in the charge-light-matched files.
-            print(f'Looping through remaining events and saving to new file {output_filepath} ...')
-            i = 0
-            for clusters_group in tqdm(clusters_groups_selection):
-                clusters_group = np.array(clusters_group)
-                if i == 0:
-                    # create the hdf5 datasets
-                    with h5py.File(output_filepath, 'a') as f_out:
-                        f_out.create_dataset('clusters', data=clusters_group, maxshape=(None,))
-                else:
-                    # add new results to hdf5 file
-                    with h5py.File(output_filepath, 'a') as f_out:
-                        f_out['clusters'].resize((f_out['clusters'].shape[0] + clusters_group.shape[0]), axis=0)
-                        f_out['clusters'][-clusters_group.shape[0]:] = clusters_group
-                i += 1
+                                    clusters_mask[index] = True
+                       
+                index += 1
+        clusters = clusters[clusters_mask]
+        # Note that we are not saving the light data again. Use `light_trig_index` to refer
+        # to the light data in the charge-light-matched files.
+        with h5py.File(output_filepath, 'a') as f_out:
+            f_out.create_dataset('clusters', data=clusters, maxshape=(None,))
         f_in.close()
         end_time = time.time()
         print(f'Total elapsed time for this file = {((end_time-start_time)/60):.3f} minutes')
+        print(f'File saved to {output_filepath}')
         
     # only create combined file when there is more than 1 input file
     if N_files > 1:
