@@ -104,7 +104,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
         analysis_start_time = time.time()
         results = \
             analysis(packets_batch, pixel_xy, mc_assn_batch, tracks, module, max_cluster_index, disabled_channel_IDs, \
-                     detprop, pedestal_dict, config_dict, dbscan, save_hits)
+                     detprop, pedestal_dict, config_dict, dbscan, save_hits, match_to_ext_trig)
         if save_hits:
             clusters, ext_trig, hits, benchmarks = results
         else:
@@ -149,9 +149,9 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
                 output_file.create_dataset('clusters', data=clusters, maxshape=(None,))
                 # making sure to continously increment cluster_index as we go onto the next batch
                 nClusters += len(clusters)
-                nClusters_Matched += np.sum(clusters['ext_trig_index'] != -1)
+                #nClusters_Matched += np.sum(clusters['ext_trig_index'] != -1)
                 #print(f'Fraction of clusters matched to ext trigger for this batch: {nClusters_Matched/nClusters}')
-                fracMatch = len(np.unique(clusters['ext_trig_index']))/len(ext_trig)
+                #fracMatch = len(np.unique(clusters['ext_trig_index']))/len(ext_trig)
                 #print(f"Fraction of ext triggers with matched clusters: {fracMatch}")
                 max_cluster_index += len(clusters)-1
                 if save_hits:
@@ -162,9 +162,9 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
             # add new results to hdf5 file
             with h5py.File(output_events_filename, 'a') as f:
                 nClusters += len(clusters)
-                nClusters_Matched += np.sum(clusters['ext_trig_index'] != -1)
+                #nClusters_Matched += np.sum(clusters['ext_trig_index'] != -1)
                 #print(f'Fraction of clusters matched to ext trigger for this batch: {nClusters_Matched/nClusters}')
-                fracMatch = len(np.unique(clusters['ext_trig_index']))/len(ext_trig)
+                #fracMatch = len(np.unique(clusters['ext_trig_index']))/len(ext_trig)
                 #print(f"Fraction of ext triggers with matched clusters: {fracMatch}")
                 f['clusters'].resize((f['clusters'].shape[0] + clusters.shape[0]), axis=0)
                 f['clusters'][-clusters.shape[0]:] = clusters
@@ -172,7 +172,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
                 if save_hits:
                     f['hits'].resize((f['hits'].shape[0] + hits.shape[0]), axis=0)
                     f['hits'][-hits.shape[0]:] = hits
-                if len(ext_trig) > 0 and match_to_ext_trig:
+                if ext_trig is not None and len(ext_trig) > 0 and match_to_ext_trig:
                     f['ext_trig'].resize((f['ext_trig'].shape[0] + ext_trig.shape[0]), axis=0)
                     f['ext_trig'][-ext_trig.shape[0]:] = ext_trig
                 

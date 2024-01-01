@@ -197,7 +197,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
 
 def analysis(packets, pixel_xy, mc_assn, tracks, module, max_cluster_index, \
              disabled_channel_IDs, detprop, pedestal_dict, \
-             config_dict, dbscan, save_hits):
+             config_dict, dbscan, save_hits, match_to_ext_trig):
     ## do charge reconstruction
     clusters = np.zeros((0,), dtype=consts.clusters_dtype)
     hits = np.zeros((0,), dtype=consts.hits_dtype)
@@ -222,27 +222,31 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, max_cluster_index, \
     get_PPS_unix_times = time.time() - start
     
     start = time.time()
-    # match together external triggers corresponding to single light triggers
-    if len(np.unique(io_group_pt7)) == 1:
-        PPS_matched = PPS_pt7
-        unix_matched = unix_pt7
+    if match_to_ext_trig:
+        # match together external triggers corresponding to single light triggers
+        if len(np.unique(io_group_pt7)) == 1:
+            PPS_matched = PPS_pt7
+            unix_matched = unix_pt7
+        else:
+            # this is slow
+            threshold = 500
+            differences = PPS_pt7[:, None] - PPS_pt7
+            mask = np.abs(differences) < threshold
+            mask = mask * np.tri(*mask.shape, k=-1)
+            i, j = np.where(mask)
+
+            PPS_matched, unix_matched = [], [] # add eventually a module identifier
+            # loop through matched ext triggers and make single arrays for PPS and unix timestamps
+            for x, y in zip(i,j):
+                if unix_pt7[x] == unix_pt7[y]:
+                    PPS_matched.append(int((float(PPS_pt7[x]) + float(PPS_pt7[y]))/2))
+                    unix_matched.append(unix_pt7[x])
+
+        ext_trig = np.zeros((np.size(PPS_matched),), dtype=consts.ext_trig_dtype)
+        ext_trig['unix'] = np.array(unix_matched).astype('i8')
+        ext_trig['t'] = np.array(PPS_matched).astype('i8')
     else:
-        threshold = 500
-        differences = PPS_pt7[:, None] - PPS_pt7
-        mask = np.abs(differences) < threshold
-        mask = mask * np.tri(*mask.shape, k=-1)
-        i, j = np.where(mask)
-    
-        PPS_matched, unix_matched = [], [] # add eventually a module identifier
-        # loop through matched ext triggers and make single arrays for PPS and unix timestamps
-        for x, y in zip(i,j):
-            if unix_pt7[x] == unix_pt7[y]:
-                PPS_matched.append(int((float(PPS_pt7[x]) + float(PPS_pt7[y]))/2))
-                unix_matched.append(unix_pt7[x])
-            
-    ext_trig = np.zeros((np.size(PPS_matched),), dtype=consts.ext_trig_dtype)
-    ext_trig['unix'] = np.array(unix_matched).astype('i8')
-    ext_trig['t'] = np.array(PPS_matched).astype('i8')
+        ext_trig = None
     match_ext_triggers = time.time() - start
     
     start = time.time()
