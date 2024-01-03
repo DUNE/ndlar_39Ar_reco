@@ -20,6 +20,7 @@ from typing import List, Dict, Union
 import time
 import sys
 from tqdm import tqdm
+from numpy.lib.recfunctions import append_fields
 
 def is_point_inside_ellipse(x, y, h, k, a, b):
     """
@@ -44,8 +45,8 @@ def get_detector_position(adc: int, channel: int, geometry_data: Dict) -> Union[
     # Extract relevant data from the geometry data
     tpc_center = geometry_data['tpc_center']
     det_center = geometry_data['det_center']
-    det_adc_all = geometry_data['det_adc']  # This now corresponds to all TPCs
-    det_chan_all = geometry_data['det_chan']  # This also corresponds to all TPCs
+    det_adc_all = geometry_data['det_adc']  
+    det_chan_all = geometry_data['det_chan'] 
     
     # Initialize variables to hold detector and tpc numbers
     detector_number = None
@@ -76,19 +77,39 @@ def get_detector_position(adc: int, channel: int, geometry_data: Dict) -> Union[
 def sum_waveforms(wvfms, channels, plot_to_adc_channel_dict, adc_channel_to_position, light_id, pedestal_range):
     # Sum the waveforms in a particular tile in a particular event
     position = np.array([0.0, 0.0, 0.0])
-    
+    positions = []
+    wvfms_det = [] # all individual SiPM wvfms
+    adc_channels = []
     for j, adc_ch in enumerate(plot_to_adc_channel_dict):
             position += np.array(adc_channel_to_position[adc_ch])
+            positions.append(np.array(adc_channel_to_position[adc_ch]))
+            adc_channels.append(adc_ch)
             if j==0:
                 wvfm_sum = np.array(wvfms[adc_ch[0]][light_id])[channels[adc_ch[0]][light_id] == adc_ch[1]]
+                wvfms_det.append(wvfm_sum)
                 if np.size(wvfm_sum) > 0:
                     wvfm_sum -= np.mean(wvfm_sum[0][pedestal_range[0]:pedestal_range[1]]).astype('int16')
             else:
                 wvfm = np.array(wvfms[adc_ch[0]][light_id])[channels[adc_ch[0]][light_id] == adc_ch[1]]
+                wvfms_det.append(wvfm)
                 if np.size(wvfm) > 0:
                     wvfm_sum = wvfm_sum + wvfm[0] - np.mean(wvfm[0][pedestal_range[0]:pedestal_range[1]]).astype('int16')
     position = position / 6
-    return wvfm_sum, position
+    return wvfm_sum, position, wvfms_det, positions, adc_channels
+
+def add_dtype_to_array(array, dtype_name, dtype_format, new_data):
+    # add a dtype and corresponding data to an already existing array/dataset.
+    # INPUTS: array: data to add to (arr)
+    #         dtype_name: name of dtype to add to array (str)
+    #         dtype_format: format of data to add (str, e.g. '<i4', 'f8', 'S10')
+    #         new_data: data to add to array (arr)
+    # OUTPUTS: new array with added data
+    new_dtype = array.dtype.descr + [(dtype_name, dtype_format)]
+    array_new = np.empty(array.shape, dtype=new_dtype)
+    for field in array.dtype.names:
+        array_new[field] = array[field]
+    array_new[dtype_name] = np.array(new_data, dtype=dtype_format)
+    return array_new
 
 def apply_data_cuts(input_config_name, *input_filepath):
     
@@ -135,6 +156,7 @@ def apply_data_cuts(input_config_name, *input_filepath):
         light_geometry = loading.load_light_geometry(light_geometry_path)
 
         # plot index to list of (adc, channel) combos that correspond to a full PD tile
+        # these dictionaries can be made by referring to the light detector geometry yaml
         if input_config_name == 'module-0':
             # plot index to list of (adc, channel) combos that correspond to a full PD tile
             io0_left_y_plot_dict = {0: [(0, 30),(0, 29),(0, 28),(0, 27),(0, 26),(0, 25)], \
@@ -157,7 +179,8 @@ def apply_data_cuts(input_config_name, *input_filepath):
                                    2: [(0, 46),(0, 45),(0, 44),(0, 43),(0, 42),(0, 41)], \
                                    3: [(0, 39),(0, 38),(0, 37),(0, 36),(0, 35),(0, 34)]}
             rows_to_use = [0,2]
-            pedestal_range = (200, 250)
+            row_column_to_remove = [(2,0), (0,3)]
+            pedestal_range = (0, 80)
             channel_range = (1, 63)
         else:
             # plot index to list of (adc, channel) combos that correspond to a full PD tile
@@ -181,12 +204,13 @@ def apply_data_cuts(input_config_name, *input_filepath):
                                    2: [(1, 41),(1, 40),(1, 39),(1, 38),(1, 37),(1, 36)], \
                                    3: [(0, 41),(0, 40),(0, 39),(0, 38),(0, 37),(0, 36)]}
             rows_to_use = [0,1,2,3]
-            pedestal_range = (600, 1000)
+            row_column_to_remove = []
+            pedestal_range = (0, 200)
             channel_range = (4, 64)
         
         # make dictionaries of (adc_num, channel_num) keys with positions
-        io0_dict_left = {} 
-        io0_dict_right = {} 
+        io0_dict_left = {}
+        io0_dict_right = {}
         io1_dict_left = {}
         io1_dict_right = {}
         for adc_id in range(0,2):
@@ -203,19 +227,20 @@ def apply_data_cuts(input_config_name, *input_filepath):
                         io1_dict_right[(adc_id, channel_id)] = position
 
         # parameters for cuts
-        d = 80 # mm, max distance of cluster from light hit
-        hit_threshold = 1000
+        d = 60 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
+        hit_threshold = 1500
         hit_upper_bound = 1e9
-        rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
+        rate_threshold = 0.3 # channel rate (Hz) threshold for disabled channels cut
         opt_cut_shape = 'rect' # proximity cut type. Options: 'ellipse', 'circle', 'rect'.
-        ellipse_b = 100 # mm
+        ellipse_b = 100 # ellipse semi-minor axis in mm
         clusters = np.array(f_in['clusters'])
-        clusters_groups_selection = []
 
-        # Remove single hit clusters that come from "noisy" channels
+        # Remove single hit clusters that come from noisy channels
         if use_disabled_channels_cut:
             print(f'Applying disabled channels cut with {rate_threshold} Hz threshold ...')
             timestamp = input_filepath.split('charge-light-matched-clusters_')[1].split('.')[0]
+            # The first word of the clusters file may differ, so might run into an error here. So just make sure
+            # you include a case here for your files. This is meant to catch some different cases.
             try:
                 clusters_file = h5py.File(data_directory+'/packet_'+timestamp+'_clusters.h5','r')
             except:
@@ -223,21 +248,28 @@ def apply_data_cuts(input_config_name, *input_filepath):
                     clusters_file = h5py.File(data_directory+'/packets-'+timestamp+'_clusters.h5','r')
                 except:
                     clusters_file = h5py.File(data_directory+'/datalog_'+timestamp+'_clusters.h5','r')
+            # Most of the noise is single hits, so we calculate the rate of single hits from each channel, then
+            # apply a cut on channels with a rate above a threshold. This should remove most if not all of the 
+            # noisy channels with the optimal cut. Obviously be careful not to set the threshold too low otherwise
+            # you run the risk of cutting out well-behaving channels.
             single_hit_clusters = clusters_file['clusters'][clusters_file['clusters']['nhit'] == 1]
-            combined_dstack = np.dstack((single_hit_clusters['x_mid'], single_hit_clusters['y_mid'], single_hit_clusters['z_anode']))[0]
+            combined_dstack = np.dstack((single_hit_clusters['x_mid'], single_hit_clusters['y_mid'], \
+                                         single_hit_clusters['z_anode']))[0]
 
             from collections import Counter
+            runtime_seconds = abs(np.max(single_hit_clusters['unix']) - np.min(single_hit_clusters['unix']))
             # count occurrences of each unique tuple of x,y, and z
             count_dict = Counter([tuple(row) for row in combined_dstack])
-            tuples_to_remove = np.array(list(count_dict.keys()))[np.array(list(count_dict.values()))/(20*60) > rate_threshold]
+            tuples_to_remove = np.array(list(count_dict.keys()))[np.array(list(count_dict.values()))/(runtime_seconds) > rate_threshold]
+            print(f'File runtime = {(runtime_seconds/60):.3f} minutes')
             print(f'{len(tuples_to_remove)} channels disabled.')
             print(f'{(100*len(tuples_to_remove)/len(list(count_dict.keys()))):.4f} percentage of channels disabled.')
 
-            print('Culling clusters from noisy channels...')
+            print('Removing clusters from noisy channels...')
             # remove 1-hit clusters that come from channel to remove
-            
             for key in tuples_to_remove:
-                mask = (single_hit_clusters['x_mid'] == key[0]) & (single_hit_clusters['y_mid'] == key[1]) & (single_hit_clusters['z_anode'] == key[2])
+                mask = (single_hit_clusters['x_mid'] == key[0]) & (single_hit_clusters['y_mid'] == key[1]) \
+                        & (single_hit_clusters['z_anode'] == key[2])
                 clusters = clusters[~np.isin(clusters['id'], single_hit_clusters[mask]['id'])]
             # clear memory before moving on
             combined_dstack=0
@@ -247,30 +279,66 @@ def apply_data_cuts(input_config_name, *input_filepath):
         print(' ')
         
         light_ids = np.array(clusters['light_trig_index'])
+        
+        # select only clusters with one light trig match for this selection
+        light_trig_mask = (light_ids != -1).sum(axis=1) == 1
+        light_ids = light_ids[light_trig_mask]
+        clusters = clusters[light_trig_mask]
+        
+        # sort by light trig index
+        clusters_indices_sorted = np.argsort(clusters['light_trig_index'][:,0])
+        light_ids = light_ids[clusters_indices_sorted]
+        clusters = clusters[clusters_indices_sorted]
+        
         clusters_mask = np.zeros(len(clusters), dtype=bool)
+        light_ids_so_far = []
+        
+        batch_size = 100
+        batch_index = 0
+        firstBatch = True
         if use_light_proximity_cut:
+            # Note that the way this is designed now, it is a bit memory intensive (3-7GB), so 
+            # make sure this is run somewhere with ample memory.
             print(f'Applying optical proximity cut with {hit_threshold} ADC hit-threshold ...')
             wvfms = [f_in['light_events']['voltage_adc1'], f_in['light_events']['voltage_adc2']]
             channels = [f_in['light_events']['channels_adc1'], f_in['light_events']['channels_adc2']]
-            plot_to_adc_channel_dict = [io0_left_y_plot_dict, io0_right_y_plot_dict, io1_left_y_plot_dict, io1_right_y_plot_dict]
+            plot_to_adc_channel_dict = [io0_left_y_plot_dict, io0_right_y_plot_dict, \
+                                        io1_left_y_plot_dict, io1_right_y_plot_dict]
             adc_channel_to_position = [io0_dict_left, io0_dict_right, io1_dict_left, io1_dict_right]
 
+            nsamples = wvfms[0].shape[2]
+            light_hits_summed_dtype = np.dtype([('light_trig_index', '<i4'), ('light_hit_index', '<i4'), ('tai_ns', '<i8'), \
+                ('unix', '<i8'), ('samples', 'i4', (nsamples)), ('io_group', '<i4'), \
+                ('rowID', '<i4'), ('columnID', '<i4'), ('det_type', 'S3')])
+            light_hits_summed = np.zeros((0,), dtype=light_hits_summed_dtype)
+            light_hits_SiPM_dtype = np.dtype([('light_trig_index', '<i4'), ('light_hit_index', '<i4'), \
+                ('channelID', '<i4', (2,)), ('position', '<f4', (3,)), ('tai_ns', '<i8'), \
+                ('unix', '<i8'), ('samples', 'i4', (nsamples,)), ('io_group', '<i4'), \
+                ('rowID', '<i4'), ('columnID', '<i4'), ('det_type', 'S3')])
+            light_hits_SiPM = np.zeros((0,), dtype=light_hits_SiPM_dtype)
+            
             # loop through light_ids to do light hit proximity cut
             index = 0
+            cluster_light_hit_indices = []
+            light_hit_index_local = 0
+            light_id_last = -1
             for light_id_list in tqdm(light_ids, desc=' Looping through clusters: '):
-                ns_diff = []
-                for j, idx in enumerate(light_id_list[light_id_list != -1]):
-                    ns_diff.append(abs(f_in['light_events'][idx]['tai_ns'] - clusters[index]['t_mid']))
-                light_id = light_id_list[np.argmin(ns_diff)]
-                
+                light_id = light_id_list[0]
                 cluster_keep = 0
+                if light_id_last != light_id:
+                    light_hit_index_local = 0
+                # loop through columns of p.detector tiles
                 for i in range(4):
+                    # loop through rows of p.detector tiles
                     for j in range(4):
-                        if j in rows_to_use:
+                        # optionally skip some rows, like for module-0 ACLs
+                        if j in rows_to_use and (j,i) not in row_column_to_remove:
+                            #print(f'(i,j) = {(i,j)}')
                             plot_to_adc_channel = list(plot_to_adc_channel_dict[i].values())[j]
 
                             # this is a summed waveform for one PD tile (sum of 6 SiPMs)
-                            wvfm_sum, tile_position = sum_waveforms(wvfms, channels, plot_to_adc_channel, adc_channel_to_position[i], light_id, pedestal_range)
+                            wvfm_sum, tile_position, wvfms_det, positions, adc_channels = sum_waveforms(wvfms, \
+                                        channels, plot_to_adc_channel, adc_channel_to_position[i], light_id, pedestal_range)
                             if np.size(wvfm_sum) > 0:
                                 wvfm_max = np.max(wvfm_sum)
                             else:
@@ -286,12 +354,15 @@ def apply_data_cuts(input_config_name, *input_filepath):
                                     continue
                                 else:
                                     pass
-                                hit_to_clusters_dist = np.sqrt((cluster['x_mid'] - tile_position[0])**2 + (cluster['y_mid'] - tile_position[1])**2)
-
+                                hit_to_clusters_dist = np.sqrt((cluster['x_mid'] - tile_position[0])**2 + \
+                                                               (cluster['y_mid'] - tile_position[1])**2)
+                                # can add additional optical cut shapes here as addition elif statements
                                 if opt_cut_shape == 'circle':
-                                    cluster_in_shape = (hit_to_clusters_dist < d) & (abs(cluster['x_mid']) < 315) & (abs(cluster['y_mid']) < 630)
+                                    cluster_in_shape = (hit_to_clusters_dist < d) & (abs(cluster['x_mid']) < 315) \
+                                                       & (abs(cluster['y_mid']) < 630)
                                 elif opt_cut_shape == 'ellipse':
-                                    cluster_in_shape = is_point_inside_ellipse(cluster['x_mid'], cluster['y_mid'], tile_position[0], tile_position[1], d, ellipse_b)
+                                    cluster_in_shape = is_point_inside_ellipse(cluster['x_mid'], cluster['y_mid'], \
+                                                        tile_position[0], tile_position[1], d, ellipse_b)
                                 elif opt_cut_shape == 'rect':
                                     if  tile_position[0] < 0 \
                                         and cluster['x_mid'] < tile_position[0]+d \
@@ -307,65 +378,150 @@ def apply_data_cuts(input_config_name, *input_filepath):
                                         cluster_in_shape = False
                                 else:
                                     raise ValueError('shape not supported')
-
+                                # Only save a cluster, and corresponding light waveforms, if it occurs 
+                                # within the confines of the shape relative to the center of the p.detector tile
                                 if cluster_in_shape:
                                     if np.any(~(((cluster['y_mid'] >= 304.31) & (cluster['y_mid'] <= 600)) 
                                                 | ((cluster['y_mid'] <= 0) & (cluster['y_mid'] > -295)))):
-                                        # if near ACLs or corners
+                                        # if near ACLs or corners. Corners have additional clusters from cosmics 
+                                        # clipping the corners.
                                         continue
                                     clusters_mask[index] = True
-                       
+                                    cluster_light_hit_indices.append(light_hit_index_local)
+                                    # save summed hit, if it hasn't already been saved
+                                    if (light_id, light_hit_index_local) not in light_ids_so_far:
+                                        hit_summed = np.zeros((1,), dtype=light_hits_summed_dtype)
+                                        hit_summed['light_trig_index'] = light_id
+                                        hit_summed['light_hit_index'] = int(light_hit_index_local)
+                                        hit_summed['tai_ns'] = f_in['light_events'][light_id]['tai_ns']
+                                        hit_summed['unix'] = f_in['light_events'][light_id]['unix']
+                                        hit_summed['samples'] = wvfm_sum
+                                        if j in [0,1]:
+                                            hit_summed['io_group'] = 1
+                                        else:
+                                            hit_summed['io_group'] = 2
+                                        hit_summed['rowID'] = i
+                                        hit_summed['columnID'] = j
+                                        if i in [0,2]:
+                                            hit_summed['det_type'] = 'LCM'
+                                        else:
+                                            hit_summed['det_type'] = 'ACL'
+                                        light_hits_summed = np.concatenate((light_hits_summed, hit_summed))
+                                         
+                                        # save individual SiPM waveform hits
+                                        for k, wvfm_SiPM in enumerate(wvfms_det):
+                                            hit_SiPM = np.zeros((1,), dtype=light_hits_SiPM_dtype)
+                                            hit_SiPM['light_trig_index'] = light_id
+                                            hit_SiPM['light_hit_index'] = int(light_hit_index_local)
+                                            hit_SiPM['channelID'] = np.array(list(adc_channels[k]),dtype='i4')
+                                            hit_SiPM['position'] = positions[k]
+                                            hit_SiPM['tai_ns'] = f_in['light_events'][light_id]['tai_ns']
+                                            hit_SiPM['unix'] = f_in['light_events'][light_id]['unix']
+                                            hit_SiPM['samples'] = wvfm_sum
+                                            if j in [0,1]:
+                                                hit_SiPM['io_group'] = 1
+                                            else:
+                                                hit_SiPM['io_group'] = 2
+                                            hit_SiPM['rowID'] = i
+                                            hit_SiPM['columnID'] = j
+                                            if i in [0,2]:
+                                                hit_SiPM['det_type'] = 'LCM'
+                                            else:
+                                                hit_SiPM['det_type'] = 'ACL'
+                                            light_hits_SiPM = np.concatenate((light_hits_SiPM, hit_SiPM))
+                                        light_ids_so_far.append((light_id, light_hit_index_local))
+                                        light_hit_index_local += 1
+                                        light_id_last = light_id
+                                    
+                                    # Save the light waveforms in batches. This is important to do
+                                    # otherwise the code will get agonizingly slow due to concatenating large arrays.
+                                    if firstBatch and batch_index == batch_size:
+                                        with h5py.File(output_filepath, 'a') as f_out:
+                                            f_out.create_dataset('light_hits_summed', data=light_hits_summed, maxshape=(None,))
+                                            f_out.create_dataset('light_hits_SiPM', data=light_hits_SiPM, maxshape=(None,))
+                                            light_hits_SiPM = np.zeros((0,), dtype=light_hits_SiPM_dtype)
+                                            light_hits_summed = np.zeros((0,), dtype=light_hits_summed_dtype)
+                                            batch_index = 0
+                                            firstBatch = False
+                                    elif not firstBatch and batch_index == batch_size:
+                                        with h5py.File(output_filepath, 'a') as f_out:
+                                            f_out['light_hits_summed'].resize((f_out['light_hits_summed'].shape[0] + light_hits_summed.shape[0]), axis=0)
+                                            f_out['light_hits_summed'][-light_hits_summed.shape[0]:] = light_hits_summed
+                                            f_out['light_hits_SiPM'].resize((f_out['light_hits_SiPM'].shape[0] + light_hits_SiPM.shape[0]), axis=0)
+                                            f_out['light_hits_SiPM'][-light_hits_SiPM.shape[0]:] = light_hits_SiPM
+                                            light_hits_SiPM = np.zeros((0,), dtype=light_hits_SiPM_dtype)
+                                            light_hits_summed = np.zeros((0,), dtype=light_hits_summed_dtype)
+                                            batch_index = 0
+                                    else:
+                                        batch_index += 1
+                            
                 index += 1
-        clusters = clusters[clusters_mask]
-        # Note that we are not saving the light data again. Use `light_trig_index` to refer
-        # to the light data in the charge-light-matched files.
+            # save last batch no matter what
+            if firstBatch and batch_index < batch_size:
+                with h5py.File(output_filepath, 'a') as f_out:
+                    f_out.create_dataset('light_hits_summed', data=light_hits_summed)
+                    f_out.create_dataset('light_hits_SiPM', data=light_hits_SiPM)
+            elif not firstBatch and batch_index < batch_size:
+                with h5py.File(output_filepath, 'a') as f_out:
+                    f_out['light_hits_summed'].resize((f_out['light_hits_summed'].shape[0] + light_hits_summed.shape[0]), axis=0)
+                    f_out['light_hits_summed'][-light_hits_summed.shape[0]:] = light_hits_summed
+                    f_out['light_hits_SiPM'].resize((f_out['light_hits_SiPM'].shape[0] + light_hits_SiPM.shape[0]), axis=0)
+                    f_out['light_hits_SiPM'][-light_hits_SiPM.shape[0]:] = light_hits_SiPM
+            clusters = clusters[clusters_mask]
+            clusters = add_dtype_to_array(clusters, 'light_hit_index', '<i4', cluster_light_hit_indices)
+        # Note that one can use the `light_trig_index` to refer to the light data in the charge-light-matched files.
         with h5py.File(output_filepath, 'a') as f_out:
-            f_out.create_dataset('clusters', data=clusters, maxshape=(None,))
+            f_out.create_dataset('clusters', data=clusters)
         f_in.close()
         end_time = time.time()
-        print(f'Total elapsed time for this file = {((end_time-start_time)/60):.3f} minutes')
+        print(f'Total elapsed time for processing this file = {((end_time-start_time)/60):.3f} minutes')
         print(f'File saved to {output_filepath}')
         
     # only create combined file when there is more than 1 input file
     if N_files > 1:
         # Initialize an empty list to store clusters data
-        clusters_data = []
+        clusters_data, light_hits_summed_data, light_hits_SiPM_data = [], [], []
         timestamps = []
 
         # Loop through the files
-        for file_path in output_filepaths:
+        max_light_trig_index_last = 0
+        for i, file_path in enumerate(output_filepaths):
             # Extract the timestamp from the file name
             file_timestamp = file_path.split('charge-light-matched-clusters_')[1].split('_with-cuts')[0]
 
             # Open the HDF5 file
             with h5py.File(file_path, 'r') as file:
                 # Get the clusters dataset from the file
-                clusters_dataset = file['clusters']
-
+                clusters_dataset = np.array(file['clusters'])
+                light_hits_summed_dataset = np.array(file['light_hits_summed'])
+                light_hits_SiPM_dataset = np.array(file['light_hits_SiPM'])
+                clusters_dataset['light_trig_index'] += max_light_trig_index_last
+                light_hits_summed_dataset['light_trig_index'] += max_light_trig_index_last
+                light_hits_SiPM_dataset['light_trig_index'] += max_light_trig_index_last
+                max_light_trig_index_last = np.max(light_hits_summed_dataset['light_trig_index'])
                 # Add the clusters data to the list
-                clusters_data.append(np.array(clusters_dataset))
+                clusters_data.append(clusters_dataset)
+                light_hits_summed_data.append(light_hits_summed_dataset)
+                light_hits_SiPM_data.append(light_hits_SiPM_dataset)
                 timestamps.extend([file_timestamp] * len(clusters_dataset))
 
         # Concatenate all the clusters data
         combined_clusters_data = np.concatenate(clusters_data, axis=0)
-
-        # Define the new dtype with the 'file_timestamp' field
-        new_dtype = combined_clusters_data.dtype.descr + [('file_timestamp', 'S23')]
-        combined_clusters_data_with_timestamps = np.empty(combined_clusters_data.shape, dtype=new_dtype)
-
-        # Copy the data from the original clusters dataset
-        for field in combined_clusters_data.dtype.names:
-            combined_clusters_data_with_timestamps[field] = combined_clusters_data[field]
-
-        # Add the 'file_timestamp' data
-        combined_clusters_data_with_timestamps['file_timestamp'] = np.array(timestamps, dtype='S23')
-
+        combined_clusters_data_with_timestamps = add_dtype_to_array(combined_clusters_data, 'file_timestamp', 'S24', timestamps)
         # Create a new HDF5 file to store the combined data
-        with h5py.File(data_directory + '/' + combined_output_filepath, 'w') as output_file:
-            # Create a new dataset for the combined clusters data
-            clusters_dataset = output_file.create_dataset('clusters', data=combined_clusters_data_with_timestamps)
-
-        print(f"Combined clusters with timestamps saved to {combined_output_filepath}")
+        with h5py.File(data_directory + '/' + combined_output_filepath, 'w') as f_out:
+            f_out.create_dataset('clusters', data=combined_clusters_data_with_timestamps)
+            for i in range(len(light_hits_summed_data)):
+                if i == 0:
+                    f_out.create_dataset('light_hits_summed', data=light_hits_summed_data[i], maxshape=(None,))
+                    f_out.create_dataset('light_hits_SiPM', data=light_hits_SiPM_data[i], maxshape=(None,))
+                else:
+                    f_out['light_hits_summed'].resize((f_out['light_hits_summed'].shape[0] + light_hits_summed_data[i].shape[0]), axis=0)
+                    f_out['light_hits_summed'][-light_hits_summed_data[i].shape[0]:] = light_hits_summed_data[i]
+                    f_out['light_hits_SiPM'].resize((f_out['light_hits_SiPM'].shape[0] + light_hits_SiPM_data[i].shape[0]), axis=0)
+                    f_out['light_hits_SiPM'][-light_hits_SiPM_data[i].shape[0]:] = light_hits_SiPM_data[i]
+                
+        print(f"Combined file saved to {combined_output_filepath}")
 if __name__ == "__main__":
     fire.Fire(apply_data_cuts)
 
