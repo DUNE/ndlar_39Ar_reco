@@ -83,7 +83,7 @@ class ModuleConfig:
             self.charge_light_matching_unix_window = 0
             self.ext_trig_PPS_window = 1000
             self.samples = 1000
-            self.nchannels = 58
+            self.nchannels = 48
             
         elif self.module_name == 'module-2':
             self.detector = 'module-2'
