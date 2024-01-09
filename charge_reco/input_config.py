@@ -90,6 +90,7 @@ class ModuleConfig:
             self.data_type = 'data'
             self.detector_dict_path = 'charge_layout/module_2_multi_tile_layout-2022_11_18_04_35_CET.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
+            self.light_det_geom_path = 'light_layout/light_module_desc-0.1.0.yaml'
             self.use_disabled_channels_list = False
             self.disabled_channels_list = None
             self.pedestal_file = 'pedestal/module2_ped-evd-2022_11_18_04_35_CET.json'
@@ -109,7 +110,7 @@ class ModuleConfig:
             self.charge_light_matching_unix_window = 0
             self.ext_trig_PPS_window = 1000
             self.samples = 1024
-            self.nchannels = 58
+            self.nchannels = 48
             
         elif self.module_name == 'module-X':
             self.detector = 'module-X'
