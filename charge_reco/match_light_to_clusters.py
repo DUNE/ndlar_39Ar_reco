@@ -80,7 +80,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                     ('voltage_adc1', 'i4', (nchannels, samples)), ('voltage_adc2', 'i4', (nchannels, samples))])
     light_events_all = np.zeros((0,), dtype=light_events_dtype)
     
-    batch_size = 100
+    batch_size = 50
     batch_index = 0
     first_batch = True
     
@@ -97,7 +97,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     nMatches_Selection = 0
     clock_correction_factor = 0.625
     z_drift_factor = 10*consts.v_drift/1e3
-    
+
     # loop through light triggers
     #for i in tqdm(range(1000), desc=' Matching clusters to light events: '):
     for i in tqdm(range(len(tai_ns_adc1)), desc=' Matching clusters to light events: '):
@@ -153,6 +153,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                     # get data for event
                     data_adc1 = f_adc1['data'][f_adc1['ref'][i]['start']:f_adc1['ref'][i]['stop']]
                     data_adc2 = f_adc2['data'][f_adc2['ref'][light_match_mask][0]['start']:f_adc2['ref'][light_match_mask][0]['stop']]
+                    
                     # get channels and voltages
                     channels_adc1 = data_adc1['channel']
                     voltage_adc1 = data_adc1['voltage']
