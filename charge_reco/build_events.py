@@ -4,7 +4,7 @@ import time
 import consts
 from calibrate import *
 
-def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, detprop, pedestal_dict, config_dict):
+def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, detprop, pedestal_dict, config_dict, v_dac):
     ## form zipped array using info from dictionary to use in clustering
     ## calculates first relative packet coordinates in each module, then adjust by TPC offsets
     ## some of this code copied from larnd-sim
@@ -45,7 +45,7 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
         chip_id = packets[i]['chip_id']
         channel_id = packets[i]['channel_id']
         unique_id = ((io_group * 256 + io_channel) * 256 + chip_id)*64 + channel_id
-        if len(pixel_xy.keys()[0]) == 4:
+        if len(list(pixel_xy.keys())[0]) == 4:
             dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
         else:
             dict_values = pixel_xy.get((chip_id, channel_id))
@@ -265,7 +265,7 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, max_cluster_index, \
     start = time.time()
     # zip up x, y, z, and t values for clustering
     txyz, packets_keep_mask, charge, unique_ids = zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, \
-                                        disabled_channel_IDs, detprop, pedestal_dict, config_dict)
+                                        disabled_channel_IDs, detprop, pedestal_dict, config_dict, v_dac)
     zip_time = time.time() - start
     
     # remove packets with key errors
