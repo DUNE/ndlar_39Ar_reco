@@ -54,6 +54,10 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
         print(f'Loading pedestals from {pedestal_file}')
         pedestal_dict = loading.load_pedestals(pedestal_file, vref_dac, vcm_dac)
     
+    if vcm_dac is None or vref_dac is None:
+        v_dac = None
+    else:
+        v_dac = (loading.dac2mV(vcm_dac, consts.vdda), loading.dac2mV(vref_dac, consts.vdda))
     detprop = loading.load_detector_properties(module)
     disabled_channel_IDs = loading.load_disabled_channels_list(module)
     
@@ -104,7 +108,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
         analysis_start_time = time.time()
         results = \
             analysis(packets_batch, pixel_xy, mc_assn_batch, tracks, module, max_cluster_index, disabled_channel_IDs, \
-                     detprop, pedestal_dict, config_dict, dbscan, save_hits, match_to_ext_trig)
+                     detprop, pedestal_dict, config_dict, dbscan, save_hits, match_to_ext_trig, v_dac)
         if save_hits:
             clusters, ext_trig, hits, benchmarks = results
         else:

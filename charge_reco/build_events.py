@@ -57,8 +57,14 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
                 packets_keep_mask[i] = True
                 unique_ids.append(unique_id)
                 if mc_assn is None:
-                    charge.append(adcs_to_mV(packets[i]['dataword'], config_dict[unique_id]['vref_mv'],\
-                               config_dict[unique_id]['vcm_mv'], pedestal_dict[unique_id]['pedestal_mv']))
+                    if v_dac is not None:
+                        vref_mv = v_dac[1]
+                        vcm_mv = v_dac[0]
+                    else:
+                        vref_mv = config_dict[unique_id]['vref_mv']
+                        vcm_mv = config_dict[unique_id]['vcm_mv']
+                    charge.append(adcs_to_mV(packets[i]['dataword'], vref_mv,\
+                               vcm_mv, pedestal_dict[unique_id]['pedestal_mv']))
                 else:
                     charge.append(adcs_to_mV(packets[i]['dataword'], v_ref_sim,\
                                v_cm_sim, v_pedestal_sim))
@@ -197,7 +203,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
 
 def analysis(packets, pixel_xy, mc_assn, tracks, module, max_cluster_index, \
              disabled_channel_IDs, detprop, pedestal_dict, \
-             config_dict, dbscan, save_hits, match_to_ext_trig):
+             config_dict, dbscan, save_hits, match_to_ext_trig, v_dac):
     ## do charge reconstruction
     clusters = np.zeros((0,), dtype=consts.clusters_dtype)
     hits = np.zeros((0,), dtype=consts.hits_dtype)
