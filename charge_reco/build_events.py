@@ -45,8 +45,10 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
         chip_id = packets[i]['chip_id']
         channel_id = packets[i]['channel_id']
         unique_id = ((io_group * 256 + io_channel) * 256 + chip_id)*64 + channel_id
-
-        dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
+        if len(pixel_xy.keys()[0]) == 4:
+            dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
+        else:
+            dict_values = pixel_xy.get((chip_id, channel_id))
         #dict_values = pixel_xy.get(unique_id)
         if dict_values is not None:
             if disabled_channel_IDs is not None and np.any(np.isin(disabled_channel_IDs, int(unique_id))):

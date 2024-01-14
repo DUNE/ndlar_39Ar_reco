@@ -25,47 +25,67 @@ def rotate_pixel(pixel_pos, tile_orientation):
 def load_geom_dict(module):
     ## load geometry dictionary for pixel positions
     # code copied from larpix-readout-parser
+    
     with open(module.detector_dict_path) as f_larpix:
         geometry_yaml = yaml.load(f_larpix, Loader=yaml.FullLoader)
-
-    pixel_pitch = geometry_yaml['pixel_pitch']
-    chip_channel_to_position = geometry_yaml['chip_channel_to_position']
-    tile_orientations = geometry_yaml['tile_orientations']
-    tile_positions = geometry_yaml['tile_positions']
-    tile_indeces = geometry_yaml['tile_indeces']
-    xs = np.array(list(chip_channel_to_position.values()))[:, 0] * pixel_pitch
-    ys = np.array(list(chip_channel_to_position.values()))[:, 1] * pixel_pitch
-    x_size = max(xs) - min(xs) + pixel_pitch
-    y_size = max(ys) - min(ys) + pixel_pitch
-
-    geometry = defaultdict(dict)
+    use_pixel_layout = True
+    try:
+        geometry_yaml['chips']
+        use_pixel_layout = False
+    except:
+        use_pixel_layout = True
     
-    for tile in geometry_yaml['tile_chip_to_io']:
-        tile_orientation = tile_orientations[tile]
+    if use_pixel_layout:
+        pixel_pitch = geometry_yaml['pixel_pitch']
+        chip_channel_to_position = geometry_yaml['chip_channel_to_position']
+        tile_orientations = geometry_yaml['tile_orientations']
+        tile_positions = geometry_yaml['tile_positions']
+        tile_indeces = geometry_yaml['tile_indeces']
+        xs = np.array(list(chip_channel_to_position.values()))[:, 0] * pixel_pitch
+        ys = np.array(list(chip_channel_to_position.values()))[:, 1] * pixel_pitch
+        x_size = max(xs) - min(xs) + pixel_pitch
+        y_size = max(ys) - min(ys) + pixel_pitch
 
-        for chip_channel in geometry_yaml['chip_channel_to_position']:
-            chip = chip_channel // 1000
-            channel = chip_channel % 1000
-            try:
-                io_group_io_channel = geometry_yaml['tile_chip_to_io'][tile][chip]
-            except KeyError:
-                continue
+        geometry = defaultdict(dict)
 
-            io_group = io_group_io_channel // 1000 # io_group per module (not the real io_group)
-            io_channel = io_group_io_channel % 1000
-            x = chip_channel_to_position[chip_channel][0] * \
-                pixel_pitch + pixel_pitch / 2 - x_size / 2
-            y = chip_channel_to_position[chip_channel][1] * \
-                pixel_pitch + pixel_pitch / 2 - y_size / 2
-            
-            x, y = rotate_pixel((x, y), tile_orientation)
+        for tile in geometry_yaml['tile_chip_to_io']:
+            tile_orientation = tile_orientations[tile]
 
-            x += tile_positions[tile][2]
-            y += tile_positions[tile][1]
-            z = tile_positions[tile][0]
-            direction = tile_orientations[tile][0]
+            for chip_channel in geometry_yaml['chip_channel_to_position']:
+                chip = chip_channel // 1000
+                channel = chip_channel % 1000
+                try:
+                    io_group_io_channel = geometry_yaml['tile_chip_to_io'][tile][chip]
+                except KeyError:
+                    continue
 
-            geometry[(io_group, io_channel, chip, channel)] = np.array([x, y, z, direction])
+                io_group = io_group_io_channel // 1000 # io_group per module (not the real io_group)
+                io_channel = io_group_io_channel % 1000
+                x = chip_channel_to_position[chip_channel][0] * \
+                    pixel_pitch + pixel_pitch / 2 - x_size / 2
+                y = chip_channel_to_position[chip_channel][1] * \
+                    pixel_pitch + pixel_pitch / 2 - y_size / 2
+
+                x, y = rotate_pixel((x, y), tile_orientation)
+
+                x += tile_positions[tile][2]
+                y += tile_positions[tile][1]
+                z = tile_positions[tile][0]
+                direction = tile_orientations[tile][0]
+
+                geometry[(io_group, io_channel, chip, channel)] = np.array([x, y, z, direction])
+    else:
+        chip_pix = dict([(chip_id, pix) for chip_id,pix in geometry_yaml['chips']])
+        nonrouted_v2a_channels=[6,7,8,9,22,23,24,25,38,39,40,54,55,56,57]
+        routed_v2a_channels=[i for i in range(64) if i not in nonrouted_v2a_channels]
+        z = 304.15 # mm
+        geometry = defaultdict(dict)
+        for chipid in chip_pix.keys():
+            for channelid in routed_v2a_channels:
+                x = geometry_yaml['pixels'][chip_pix[chipid][channelid]][1]
+                y = geometry_yaml['pixels'][chip_pix[chipid][channelid]][2]
+                geometry[(chipid, channelid)] = np.array([x, y, z, -1])
+
     return geometry
 
 def load_pedestal_and_config(module):
