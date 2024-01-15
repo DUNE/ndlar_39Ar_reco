@@ -143,9 +143,10 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
                     np.put(clusters['z_drift_mid'], cluster_index, z_drift_min)
                     np.put(clusters['z_drift_min'], cluster_index, z_drift_mid)
                     np.put(clusters['z_drift_max'], cluster_index, z_drift_max)
+            ext_trig_max_index += len(ext_trig)
         matching_end_time = time.time()
         
-        ext_trig_max_index += len(ext_trig)
+        
         
         if i == 0:
             # create the hdf5 datasets with initial results
