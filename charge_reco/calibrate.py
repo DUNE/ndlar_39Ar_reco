@@ -25,7 +25,7 @@ def timestamp_corrector(packets, mc_assn, unix, module):
     # Corrects larpix clock timestamps due to slightly different PACMAN clock frequencies 
     # (from module0_flow timestamp_corrector.py)
     ts = packets['timestamp'].astype('i8')
-    packet_type_0 = packets['packet_type'] == 0
+    packet_type_0 = (packets['packet_type'] == 0) & (packets['valid_parity'] == 1)
     ts = ts[packet_type_0]
     packets = packets[packet_type_0]
     if mc_assn is not None:
