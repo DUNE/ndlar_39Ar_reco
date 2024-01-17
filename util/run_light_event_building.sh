@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
-DET="module-1"
+DET="module-2"
 if [ "${DET}" = "module-0" ]; then
-    OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module0_reco
+    OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module0_reco/39Ar_reco
+    data_folder=/global/cfs/cdirs/dune/www/data/Module0/LRS
+    ADC_name_1=0a7a314c
+    ADC_name_2=0a7b54bd
+    file_timestamp=20210404_121849
 elif [ "${DET}" = "module-1" ]; then
     OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module1_reco/39Ar_reco_09132023
     data_folder=/global/cfs/cdirs/dune/www/data/Module1/LRS/SingleModule_Jan22
@@ -10,11 +14,11 @@ elif [ "${DET}" = "module-1" ]; then
     ADC_name_2=0cd93db0
     file_timestamp=20220208_141741
 elif [ "${DET}" = "module-2" ]; then
-    OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module2_reco
-    data_folder=/global/cfs/cdirs/dune/www/data/Module2/LRS.1/cosmic
+    OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/Module2_reco/39Ar_reco
+    data_folder=/global/cfs/cdirs/dune/www/data/Module2/LRS.2/cosmic
     ADC_name_1=0cd8d631
     ADC_name_2=0cd913fa
-    file_timestamp=20221119_043121
+    file_timestamp=20221203_135230
 elif [ "${DET}" = "module-X" ]; then
     OUTDIR=/global/cfs/cdirs/dune/users/sfogarty/ModuleX_reco/nominalHV_lastDataTaken
     data_folder=/global/cfs/cdirs/dune/www/data/ModuleX/LRS/cosmic
