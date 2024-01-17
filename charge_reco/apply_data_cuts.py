@@ -21,6 +21,7 @@ import time
 import sys
 from tqdm import tqdm
 from numpy.lib.recfunctions import append_fields
+from math import ceil
 
 def is_point_inside_ellipse(x, y, h, k, a, b):
     """
@@ -74,23 +75,31 @@ def get_detector_position(adc: int, channel: int, geometry_data: Dict) -> Union[
     
     return [x, y, z]
 
-def sum_waveforms(wvfms, channels, plot_to_adc_channel_dict, adc_channel_to_position, light_id, pedestal_range):
+def sum_waveforms(light_event, batch_start, plot_to_adc_channel_dict, adc_channel_to_position, light_id, pedestal_range):
     # Sum the waveforms in a particular tile in a particular event
     position = np.array([0.0, 0.0, 0.0])
     positions = []
     wvfms_det = [] # all individual SiPM wvfms
     adc_channels = []
+    #print(f'light_id-batch_start={light_id-batch_start}, light_id={light_id}, batch_start={batch_start}')
     for j, adc_ch in enumerate(plot_to_adc_channel_dict):
             position += np.array(adc_channel_to_position[adc_ch])
             positions.append(np.array(adc_channel_to_position[adc_ch]))
             adc_channels.append(adc_ch)
+            
+            if adc_ch[0] == 0:
+                dtype_names = ['voltage_adc1', 'channels_adc1']
+            else:
+                dtype_names = ['voltage_adc2', 'channels_adc2']
             if j==0:
-                wvfm_sum = np.array(wvfms[adc_ch[0]][light_id])[channels[adc_ch[0]][light_id] == adc_ch[1]]
+                #wvfm_sum = np.array(f_in['light_events'][light_id][dtype_names[0]])[f_in['light_events'][light_id][dtype_names[1]] == adc_ch[1]]
+                wvfm_sum = np.array(light_event[dtype_names[0]])[light_event[dtype_names[1]] == adc_ch[1]]
                 wvfms_det.append(wvfm_sum)
                 if np.size(wvfm_sum) > 0:
                     wvfm_sum -= np.mean(wvfm_sum[0][pedestal_range[0]:pedestal_range[1]]).astype('int16')
             else:
-                wvfm = np.array(wvfms[adc_ch[0]][light_id])[channels[adc_ch[0]][light_id] == adc_ch[1]]
+                #wvfm = np.array(f_in['light_events'][light_id][dtype_names[0]])[f_in['light_events'][light_id][dtype_names[1]] == adc_ch[1]]
+                wvfm = np.array(light_event[dtype_names[0]])[light_event[dtype_names[1]] == adc_ch[1]]
                 wvfms_det.append(wvfm)
                 if np.size(wvfm) > 0:
                     wvfm_sum = wvfm_sum + wvfm[0] - np.mean(wvfm[0][pedestal_range[0]:pedestal_range[1]]).astype('int16')
@@ -227,10 +236,10 @@ def apply_data_cuts(input_config_name, *input_filepath):
                         io1_dict_right[(adc_id, channel_id)] = position
 
         # parameters for cuts
-        d = 60 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
-        hit_threshold = 1500
+        d = 80 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
+        hit_threshold = 1000
         hit_upper_bound = 1e9
-        rate_threshold = 0.3 # channel rate (Hz) threshold for disabled channels cut
+        rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
         opt_cut_shape = 'rect' # proximity cut type. Options: 'ellipse', 'circle', 'rect'.
         ellipse_b = 100 # ellipse semi-minor axis in mm
         clusters = np.array(f_in['clusters'])
@@ -247,7 +256,10 @@ def apply_data_cuts(input_config_name, *input_filepath):
                 try:
                     clusters_file = h5py.File(data_directory+'/packets-'+timestamp+'_clusters.h5','r')
                 except:
-                    clusters_file = h5py.File(data_directory+'/datalog_'+timestamp+'_clusters.h5','r')
+                    try:
+                        clusters_file = h5py.File(data_directory+'/datalog_'+timestamp+'_clusters.h5','r')
+                    except:
+                        clusters_file = h5py.File(data_directory+'/self_trigger_tpc12_run2-packet-'+timestamp+'_clusters.h5', 'r')
             # Most of the noise is single hits, so we calculate the rate of single hits from each channel, then
             # apply a cut on channels with a rate above a threshold. This should remove most if not all of the 
             # noisy channels with the optimal cut. Obviously be careful not to set the threshold too low otherwise
@@ -286,27 +298,45 @@ def apply_data_cuts(input_config_name, *input_filepath):
         clusters = clusters[light_trig_mask]
         
         # sort by light trig index
-        clusters_indices_sorted = np.argsort(clusters['light_trig_index'][:,0])
-        light_ids = light_ids[clusters_indices_sorted]
-        clusters = clusters[clusters_indices_sorted]
+        #clusters_indices_sorted = np.argsort(clusters['light_trig_index'][:,0])
+        #light_ids = light_ids[clusters_indices_sorted]
+        #clusters = clusters[clusters_indices_sorted]
+        
+        # sort by unix second, find start and stop indices for each occurrance of a unix second value
+        sorted_indices = np.argsort(clusters['unix'])
+        clusters[:] = clusters[sorted_indices]
+
+        # find start and stop indices for each occurrance of a unix second value
+        unique_unix, start_indices = np.unique(clusters['unix'], return_index=True)
+        end_indices = np.roll(start_indices, shift=-1)
+        end_indices[-1] = len(clusters) - 1
+
+        unix_chunk_indices = {}
+        for unix_val, start_idx, end_idx in zip(unique_unix, start_indices, end_indices):
+            unix_chunk_indices[unix_val] = (start_idx, end_idx)
         
         clusters_mask = np.zeros(len(clusters), dtype=bool)
+        clusters_light_hit_index = np.zeros(len(clusters))
         light_ids_so_far = []
         
-        batch_size = 100
+        batch_size = 25
         batch_index = 0
         firstBatch = True
+        clustersSaved = False
+        
         if use_light_proximity_cut:
             # Note that the way this is designed now, it is a bit memory intensive (3-7GB), so 
             # make sure this is run somewhere with ample memory.
             print(f'Applying optical proximity cut with {hit_threshold} ADC hit-threshold ...')
-            wvfms = [f_in['light_events']['voltage_adc1'], f_in['light_events']['voltage_adc2']]
-            channels = [f_in['light_events']['channels_adc1'], f_in['light_events']['channels_adc2']]
+            #light_events = f_in['light_events']
+            #wvfms_adc1 = f_in['light_events']['voltage_adc1']
+            #wvfms_adc2 = f_in['light_events']['voltage_adc2']
+            #channels = [f_in['light_events']['channels_adc1'], f_in['light_events']['channels_adc2']]
             plot_to_adc_channel_dict = [io0_left_y_plot_dict, io0_right_y_plot_dict, \
                                         io1_left_y_plot_dict, io1_right_y_plot_dict]
             adc_channel_to_position = [io0_dict_left, io0_dict_right, io1_dict_left, io1_dict_right]
 
-            nsamples = wvfms[0].shape[2]
+            nsamples = module.samples
             light_hits_summed_dtype = np.dtype([('light_trig_index', '<i4'), ('light_hit_index', '<i4'), ('tai_ns', '<i8'), \
                 ('unix', '<i8'), ('samples', 'i4', (nsamples)), ('io_group', '<i4'), \
                 ('rowID', '<i4'), ('columnID', '<i4'), ('det_type', 'S3')])
@@ -321,141 +351,161 @@ def apply_data_cuts(input_config_name, *input_filepath):
             index = 0
             cluster_light_hit_indices = []
             light_hit_index_local = 0
-            light_id_last = -1
-            for light_id_list in tqdm(light_ids, desc=' Looping through clusters: '):
-                light_id = light_id_list[0]
+            light_id_last = 0
+            
+            # load in a chunk of the light data at a time into a numpy array to speed up code
+            light_batch_size = 25
+            unique_light_ids = np.unique(light_ids[:,0])
+            light_nBatches = len(unique_light_ids)/light_batch_size
+            light_batch_index = 0
+            batch_start = 0
+            batch_end = light_batch_size
+
+            for lb in tqdm(range(ceil(light_nBatches)), desc='Processing light event batches: '):
                 cluster_keep = 0
-                if light_id_last != light_id:
+                
+                if lb < ceil(light_nBatches):
+                    light_events = np.array(f_in['light_events'][batch_start:batch_end])
+                    batch_start += light_batch_size
+                    batch_end += light_batch_size
+                else:
+                    batch_end = len(f_in['light_events'])
+                    light_events = np.array(f_in['light_events'][batch_start:batch_end])
+                for light_event in light_events:
+                    # only match light trig to clusters of same unix second
+                    light_unix_s = light_event['unix']
+                    try:
+                        start_index, stop_index = unix_chunk_indices[int(light_unix_s)]
+                    except:
+                        continue
+                    clusters_chunk = clusters[start_index:stop_index+1]
+                
                     light_hit_index_local = 0
-                # loop through columns of p.detector tiles
-                for i in range(4):
-                    # loop through rows of p.detector tiles
-                    for j in range(4):
-                        # optionally skip some rows, like for module-0 ACLs
-                        if j in rows_to_use and (j,i) not in row_column_to_remove:
-                            #print(f'(i,j) = {(i,j)}')
-                            plot_to_adc_channel = list(plot_to_adc_channel_dict[i].values())[j]
+                    # loop through columns of p.detector tiles
+                    for i in range(4):
+                        # loop through rows of p.detector tiles
+                        for j in range(4):
+                            # optionally skip some rows, like for module-0 ACLs
+                            if j in rows_to_use and (j,i) not in row_column_to_remove:
+                                #print(f'(i,j) = {(i,j)}')
+                                plot_to_adc_channel = list(plot_to_adc_channel_dict[i].values())[j]
 
-                            # this is a summed waveform for one PD tile (sum of 6 SiPMs)
-                            wvfm_sum, tile_position, wvfms_det, positions, adc_channels = sum_waveforms(wvfms, \
-                                        channels, plot_to_adc_channel, adc_channel_to_position[i], light_id, pedestal_range)
-                            if np.size(wvfm_sum) > 0:
-                                wvfm_max = np.max(wvfm_sum)
-                            else:
-                                wvfm_max = 0
-
-                            # only keep events with a summed waveform above the threshold
-                            if wvfm_max > hit_threshold and wvfm_max < hit_upper_bound:
-                                cluster = clusters[index]
-                                # don't compare a wvfm in tpc1 to a cluster in tpc2, vice versa
-                                if tile_position[2] < 0 and cluster['io_group'] == 2:
-                                    continue
-                                elif tile_position[2] > 0 and cluster['io_group'] == 1:
-                                    continue
+                                # this is a summed waveform for one PD tile (sum of 6 SiPMs)
+                                wvfm_sum, tile_position, wvfms_det, positions, adc_channels = \
+                                        sum_waveforms(light_event, batch_start, plot_to_adc_channel, \
+                                        adc_channel_to_position[i], light_batch_index, pedestal_range)
+                                if np.size(wvfm_sum) > 0:
+                                    wvfm_max = np.max(wvfm_sum)
                                 else:
-                                    pass
-                                hit_to_clusters_dist = np.sqrt((cluster['x_mid'] - tile_position[0])**2 + \
-                                                               (cluster['y_mid'] - tile_position[1])**2)
-                                # can add additional optical cut shapes here as addition elif statements
-                                if opt_cut_shape == 'circle':
-                                    cluster_in_shape = (hit_to_clusters_dist < d) & (abs(cluster['x_mid']) < 315) \
-                                                       & (abs(cluster['y_mid']) < 630)
-                                elif opt_cut_shape == 'ellipse':
-                                    cluster_in_shape = is_point_inside_ellipse(cluster['x_mid'], cluster['y_mid'], \
-                                                        tile_position[0], tile_position[1], d, ellipse_b)
-                                elif opt_cut_shape == 'rect':
-                                    if  tile_position[0] < 0 \
-                                        and cluster['x_mid'] < tile_position[0]+d \
-                                        and cluster['y_mid'] > tile_position[1]-304/2 \
-                                        and cluster['y_mid'] < tile_position[1]+304/2:
-                                        cluster_in_shape = True
-                                    elif  tile_position[0] > 0 \
-                                        and cluster['x_mid'] > tile_position[0]-d \
-                                        and cluster['y_mid'] > tile_position[1]-304/2 \
-                                        and cluster['y_mid'] < tile_position[1]+304/2:
-                                        cluster_in_shape = True
+                                    wvfm_max = 0
+
+                                # only keep events with a summed waveform above the threshold
+                                if wvfm_max > hit_threshold and wvfm_max < hit_upper_bound:
+                                    if tile_position[2] < 0:
+                                        tpc_id = 1
                                     else:
-                                        cluster_in_shape = False
-                                else:
-                                    raise ValueError('shape not supported')
-                                # Only save a cluster, and corresponding light waveforms, if it occurs 
-                                # within the confines of the shape relative to the center of the p.detector tile
-                                if cluster_in_shape:
-                                    if np.any(~(((cluster['y_mid'] >= 304.31) & (cluster['y_mid'] <= 600)) 
-                                                | ((cluster['y_mid'] <= 0) & (cluster['y_mid'] > -295)))):
-                                        # if near ACLs or corners. Corners have additional clusters from cosmics 
-                                        # clipping the corners.
-                                        continue
-                                    clusters_mask[index] = True
-                                    cluster_light_hit_indices.append(light_hit_index_local)
-                                    # save summed hit, if it hasn't already been saved
-                                    if (light_id, light_hit_index_local) not in light_ids_so_far:
-                                        hit_summed = np.zeros((1,), dtype=light_hits_summed_dtype)
-                                        hit_summed['light_trig_index'] = light_id
-                                        hit_summed['light_hit_index'] = int(light_hit_index_local)
-                                        hit_summed['tai_ns'] = f_in['light_events'][light_id]['tai_ns']
-                                        hit_summed['unix'] = f_in['light_events'][light_id]['unix']
-                                        hit_summed['samples'] = wvfm_sum
-                                        if j in [0,1]:
-                                            hit_summed['io_group'] = 1
-                                        else:
-                                            hit_summed['io_group'] = 2
-                                        hit_summed['rowID'] = i
-                                        hit_summed['columnID'] = j
-                                        if i in [0,2]:
-                                            hit_summed['det_type'] = 'LCM'
-                                        else:
-                                            hit_summed['det_type'] = 'ACL'
-                                        light_hits_summed = np.concatenate((light_hits_summed, hit_summed))
-                                         
-                                        # save individual SiPM waveform hits
-                                        for k, wvfm_SiPM in enumerate(wvfms_det):
-                                            hit_SiPM = np.zeros((1,), dtype=light_hits_SiPM_dtype)
-                                            hit_SiPM['light_trig_index'] = light_id
-                                            hit_SiPM['light_hit_index'] = int(light_hit_index_local)
-                                            hit_SiPM['channelID'] = np.array(list(adc_channels[k]),dtype='i4')
-                                            hit_SiPM['position'] = positions[k]
-                                            hit_SiPM['tai_ns'] = f_in['light_events'][light_id]['tai_ns']
-                                            hit_SiPM['unix'] = f_in['light_events'][light_id]['unix']
-                                            hit_SiPM['samples'] = wvfm_sum
-                                            if j in [0,1]:
-                                                hit_SiPM['io_group'] = 1
-                                            else:
-                                                hit_SiPM['io_group'] = 2
-                                            hit_SiPM['rowID'] = i
-                                            hit_SiPM['columnID'] = j
-                                            if i in [0,2]:
-                                                hit_SiPM['det_type'] = 'LCM'
-                                            else:
-                                                hit_SiPM['det_type'] = 'ACL'
-                                            light_hits_SiPM = np.concatenate((light_hits_SiPM, hit_SiPM))
-                                        light_ids_so_far.append((light_id, light_hit_index_local))
-                                        light_hit_index_local += 1
-                                        light_id_last = light_id
+                                        tpc_id = 2
+                                    hit_to_clusters_dist = np.sqrt((clusters_chunk['x_mid'] - tile_position[0])**2 + \
+                                                                   (clusters_chunk['y_mid'] - tile_position[1])**2)
+                                    # can add additional optical cut shapes here as addition elif statements
+                                    if opt_cut_shape == 'circle':
+                                        cluster_in_shape = (hit_to_clusters_dist < d) & (np.abs(clusters_chunk['x_mid']) < 315) \
+                                                           & (np.abs(clusters_chunk['y_mid']) < 630) & (clusters_chunk['io_group'] == tpc_id)
+                                    elif opt_cut_shape == 'ellipse':
+                                        cluster_in_shape = is_point_inside_ellipse(clusters_chunk['x_mid'], clusters_chunk['y_mid'], \
+                                                            tile_position[0], tile_position[1], d, ellipse_b)
+                                    elif opt_cut_shape == 'rect':
+                                        if tile_position[0] < 0:
+                                            cluster_in_shape = (clusters_chunk['x_mid'] < tile_position[0]+d) \
+                                                & (clusters_chunk['y_mid'] > tile_position[1]-304/2) \
+                                                & (clusters_chunk['y_mid'] < tile_position[1]+304/2)
+                                        elif tile_position[0] > 0:
+                                            cluster_in_shape = (clusters_chunk['x_mid'] > tile_position[0]-d) \
+                                                & (clusters_chunk['y_mid'] > tile_position[1]-304/2) \
+                                                & (clusters_chunk['y_mid'] < tile_position[1]+304/2)
+                                    else:
+                                        raise ValueError('shape not supported')
+                                    # Only save a cluster, and corresponding light waveforms, if it occurs 
+                                    # within the confines of the shape relative to the center of the p.detector tile
+                                    #corner_mask  = ~(((clusters_chunk['y_mid'] >= 304.31) & (clusters_chunk['y_mid'] <= 600)) \
+                                    #            | ((clusters_chunk['y_mid'] <= 0) & (clusters_chunk['y_mid'] > -295)))
+                                    cluster_in_shape = cluster_in_shape #& corner_mask
+                                    clusters_mask[start_index:stop_index+1] += cluster_in_shape
+                                    clusters_light_hit_index[start_index:stop_index+1] = int(light_hit_index_local)
                                     
-                                    # Save the light waveforms in batches. This is important to do
-                                    # otherwise the code will get agonizingly slow due to concatenating large arrays.
-                                    if firstBatch and batch_index == batch_size:
-                                        with h5py.File(output_filepath, 'a') as f_out:
-                                            f_out.create_dataset('light_hits_summed', data=light_hits_summed, maxshape=(None,))
-                                            f_out.create_dataset('light_hits_SiPM', data=light_hits_SiPM, maxshape=(None,))
-                                            light_hits_SiPM = np.zeros((0,), dtype=light_hits_SiPM_dtype)
-                                            light_hits_summed = np.zeros((0,), dtype=light_hits_summed_dtype)
-                                            batch_index = 0
-                                            firstBatch = False
-                                    elif not firstBatch and batch_index == batch_size:
-                                        with h5py.File(output_filepath, 'a') as f_out:
-                                            f_out['light_hits_summed'].resize((f_out['light_hits_summed'].shape[0] + light_hits_summed.shape[0]), axis=0)
-                                            f_out['light_hits_summed'][-light_hits_summed.shape[0]:] = light_hits_summed
-                                            f_out['light_hits_SiPM'].resize((f_out['light_hits_SiPM'].shape[0] + light_hits_SiPM.shape[0]), axis=0)
-                                            f_out['light_hits_SiPM'][-light_hits_SiPM.shape[0]:] = light_hits_SiPM
-                                            light_hits_SiPM = np.zeros((0,), dtype=light_hits_SiPM_dtype)
-                                            light_hits_summed = np.zeros((0,), dtype=light_hits_summed_dtype)
-                                            batch_index = 0
+                                    hit_summed = np.zeros((1,), dtype=light_hits_summed_dtype)
+                                    hit_summed['light_trig_index'] = light_event['id']
+                                    hit_summed['light_hit_index'] = int(light_hit_index_local)
+                                    hit_summed['tai_ns'] = light_event['tai_ns']
+                                    hit_summed['unix'] = light_event['unix']
+                                    hit_summed['samples'] = wvfm_sum
+                                    if j in [0,1]:
+                                        hit_summed['io_group'] = 1
                                     else:
-                                        batch_index += 1
-                            
-                index += 1
+                                        hit_summed['io_group'] = 2
+                                    hit_summed['rowID'] = i
+                                    hit_summed['columnID'] = j
+                                    if i in [0,2]:
+                                        hit_summed['det_type'] = 'LCM'
+                                    else:
+                                        hit_summed['det_type'] = 'ACL'
+                                    light_hits_summed = np.concatenate((light_hits_summed, hit_summed))
+
+                                    # save individual SiPM waveform hits
+                                    for k, wvfm_SiPM in enumerate(wvfms_det):
+                                        hit_SiPM = np.zeros((1,), dtype=light_hits_SiPM_dtype)
+                                        hit_SiPM['light_trig_index'] = light_event['id']
+                                        hit_SiPM['light_hit_index'] = int(light_hit_index_local)
+                                        hit_SiPM['channelID'] = np.array(list(adc_channels[k]),dtype='i4')
+                                        hit_SiPM['position'] = positions[k]
+                                        hit_SiPM['tai_ns'] = light_event['tai_ns']
+                                        hit_SiPM['unix'] = light_event['unix']
+                                        hit_SiPM['samples'] = wvfm_sum
+                                        if j in [0,1]:
+                                            hit_SiPM['io_group'] = 1
+                                        else:
+                                            hit_SiPM['io_group'] = 2
+                                        hit_SiPM['rowID'] = i
+                                        hit_SiPM['columnID'] = j
+                                        if i in [0,2]:
+                                            hit_SiPM['det_type'] = 'LCM'
+                                        else:
+                                            hit_SiPM['det_type'] = 'ACL'
+                                        light_hits_SiPM = np.concatenate((light_hits_SiPM, hit_SiPM))
+                                    #light_ids_so_far.append((light_event['id'], light_hit_index_local))
+                                    light_hit_index_local += 1
+                                    #light_id_last = light_id
+
+                    # Save the light waveforms in batches. This is important to do
+                    # otherwise the code will get agonizingly slow due to concatenating large arrays.
+                    if firstBatch and batch_index == batch_size:
+                        with h5py.File(output_filepath, 'a') as f_out:
+                            f_out.create_dataset('light_hits_summed', data=light_hits_summed, maxshape=(None,))
+                            f_out.create_dataset('light_hits_SiPM', data=light_hits_SiPM, maxshape=(None,))
+                            light_hits_SiPM = np.zeros((0,), dtype=light_hits_SiPM_dtype)
+                            light_hits_summed = np.zeros((0,), dtype=light_hits_summed_dtype)
+                            batch_index = 0
+                            firstBatch = False
+                    elif not firstBatch and batch_index == batch_size:
+                        with h5py.File(output_filepath, 'a') as f_out:
+                            f_out['light_hits_summed'].resize((f_out['light_hits_summed'].shape[0] + light_hits_summed.shape[0]), axis=0)
+                            f_out['light_hits_summed'][-light_hits_summed.shape[0]:] = light_hits_summed
+                            f_out['light_hits_SiPM'].resize((f_out['light_hits_SiPM'].shape[0] + light_hits_SiPM.shape[0]), axis=0)
+                            f_out['light_hits_SiPM'][-light_hits_SiPM.shape[0]:] = light_hits_SiPM
+                            light_hits_SiPM = np.zeros((0,), dtype=light_hits_SiPM_dtype)
+                            light_hits_summed = np.zeros((0,), dtype=light_hits_summed_dtype)
+                            batch_index = 0
+                    else:
+                        batch_index += 1
+
+                    index += 1
+                
+            clusters = clusters[clusters_mask]
+            clusters_light_hit_index = clusters_light_hit_index[clusters_mask]
+            clusters = add_dtype_to_array(clusters, 'light_hit_index', '<i4', clusters_light_hit_index)
+            with h5py.File(output_filepath, 'a') as f_out:
+                f_out.create_dataset('clusters', data=clusters)
+            clustersSaved = True
             # save last batch no matter what
             if firstBatch and batch_index < batch_size:
                 with h5py.File(output_filepath, 'a') as f_out:
@@ -467,11 +517,11 @@ def apply_data_cuts(input_config_name, *input_filepath):
                     f_out['light_hits_summed'][-light_hits_summed.shape[0]:] = light_hits_summed
                     f_out['light_hits_SiPM'].resize((f_out['light_hits_SiPM'].shape[0] + light_hits_SiPM.shape[0]), axis=0)
                     f_out['light_hits_SiPM'][-light_hits_SiPM.shape[0]:] = light_hits_SiPM
-            clusters = clusters[clusters_mask]
-            clusters = add_dtype_to_array(clusters, 'light_hit_index', '<i4', cluster_light_hit_indices)
+            
         # Note that one can use the `light_trig_index` to refer to the light data in the charge-light-matched files.
-        with h5py.File(output_filepath, 'a') as f_out:
-            f_out.create_dataset('clusters', data=clusters)
+        if not clustersSaved:
+            with h5py.File(output_filepath, 'a') as f_out:
+                f_out.create_dataset('clusters', data=clusters)
         f_in.close()
         end_time = time.time()
         print(f'Total elapsed time for processing this file = {((end_time-start_time)/60):.3f} minutes')
