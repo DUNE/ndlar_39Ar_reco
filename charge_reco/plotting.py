@@ -5,6 +5,8 @@ import h5py
 import matplotlib.colors as colors
 from matplotlib.colors import LogNorm
 from tqdm import tqdm
+from scipy import stats
+import matplotlib.colors as mcolors
 
 def XY_Hist2D(clusters, figTitle=None, vmin=1e0, vmax=1e3, use_z_cut=True):
     ### plot 2D histogram of clusters
@@ -39,7 +41,7 @@ def XY_Hist2D(clusters, figTitle=None, vmin=1e0, vmax=1e3, use_z_cut=True):
     axes[1].set_xlim(x_min_max[0], x_min_max[1])
     plt.show()
 
-def XZ_Hist2D(clusters, figTitle=None, logYscale=False, vmin=1, vmax=1e3):
+def XZ_Hist2D(clusters, figTitle=None, logYscale=False, vmin=1, vmax=1e3, weight_type=None):
     ### plot 2D histogram of clusters
     x_min_max = [-310,310]
     x_bins = 140
@@ -51,7 +53,7 @@ def XZ_Hist2D(clusters, figTitle=None, logYscale=False, vmin=1, vmax=1e3):
     z_anode_min = np.min(clusters['z_anode'])
     
     if logYscale:
-        norm = colors.LogNorm(vmin=1e0,vmax=1e+3)
+        norm = colors.LogNorm(vmin=vmin,vmax=vmax)
     else:
         norm = None
     
@@ -60,8 +62,14 @@ def XZ_Hist2D(clusters, figTitle=None, logYscale=False, vmin=1, vmax=1e3):
     clusters_TPC1 = clusters[TPC1_mask]
     clusters_TPC2 = clusters[TPC2_mask]
     clusters_fiducial = np.concatenate((clusters_TPC1, clusters_TPC2))
-    
-    H1 = axes.hist2d(clusters_fiducial['x_mid'], clusters_fiducial['z_drift_mid'], range=[x_min_max, x_min_max],bins = [x_bins,y_bins], weights=np.ones_like(clusters_fiducial['x_mid']), vmin=vmin, vmax=vmax,norm = norm)
+    if weight_type == 'q':
+        bin_counts = np.histogram2d(clusters_tagged['x_mid'], clusters_tagged['y_mid'], bins=[x_bins,y_bins], range=[x_min_max,x_min_max])[0]
+        weights = clusters_fiducial['q']*221*1e-3
+    else:
+        weights = np.ones_like(clusters_fiducial['x_mid'])
+    H1 = axes.hist2d(clusters_fiducial['x_mid'], clusters_fiducial['z_drift_mid'], \
+                     range=[x_min_max,x_min_max],bins = [x_bins,y_bins], \
+                     weights=weights, vmin=vmin, vmax=vmax,norm = norm)
     axes.set_xlabel(r'$x_{reco}$ [mm]')
     axes.set_ylabel(r'$z_{reco}$ [mm]')
     axes.set_ylim(x_min_max[0], x_min_max[1])
@@ -69,6 +77,61 @@ def XZ_Hist2D(clusters, figTitle=None, logYscale=False, vmin=1, vmax=1e3):
     fig.suptitle(figTitle)
 
     plt.show()
+
+def plot_2D_statistic(clusters, values, stat, plot_type, xlabel=None, ylabel=None, figTitle=None, vmin=None, vmax=None, log_scale=False):
+    if plot_type == 'xy':
+        ncols=2
+        figsize=(8,6)
+    elif plot_type == 'xz':
+        ncols=1
+        figsize=(8,6)
+    else:
+        raise Exception('plot type not supported')
+    fig, axes = plt.subplots(nrows=1, ncols=ncols, sharex=False, sharey=False, figsize=figsize)
+    cmap = plt.cm.jet
+        
+    if plot_type == 'xz':
+        RANGE = [-310,310]
+        x_bins = 140
+        y_bins = x_bins
+        axes.set_xlabel(r'$x_{reco}$ [mm]')
+        axes.set_ylabel(r'$z_{reco}$ [mm]')
+        axes.set_ylim(RANGE[0], RANGE[1])
+        axes.set_xlim(RANGE[0], RANGE[1])
+    elif plot_type == 'xy':
+        y_min_max = [-620,620]
+        x_min_max = [-310,310]
+        RANGE=[x_min_max, y_min_max]
+        x_bins = 140
+        y_bins = 2*x_bins
+        axes[0].set_xlabel(r'$x_{reco}$ [mm]')
+        axes[1].set_xlabel(r'$x_{reco}$ [mm]')
+        axes[0].set_ylabel(r'$y_{reco}$ [mm]')
+        axes[0].set_ylim(y_min_max[0], y_min_max[1])
+        axes[0].set_xlim(x_min_max[0], x_min_max[1])
+        axes[1].set_ylim(y_min_max[0], y_min_max[1])
+        axes[1].set_xlim(x_min_max[0], x_min_max[1])
+    if plot_type == 'xy':
+        hist_data = stats.binned_statistic_2d(clusters['x_mid'], clusters['y_mid'], values, statistic=stat, bins=[x_bins,y_bins], range=RANGE)
+    elif plot_type == 'xz':
+        hist_data = stats.binned_statistic_2d(clusters['x_mid'], clusters['z_drift_mid'], values, statistic=stat, bins=[x_bins,y_bins], range=[RANGE, RANGE])
+
+    if log_scale:
+        norm = mcolors.LogNorm(vmin=np.nanmin(hist_data.statistic), vmax=np.nanmax(hist_data.statistic))
+    else:
+        norm = None
+    if plot_type == 'xz':
+        im = axes.imshow(hist_data.statistic.T, cmap=cmap,norm=norm, origin='lower', extent=[RANGE[0], RANGE[1], RANGE[0], RANGE[1]])
+        colorbar = plt.colorbar(im, ax=axes)
+        im.set_clim(vmin, vmax)
+    elif plot_type == 'xy':
+        im = axes[0].imshow(hist_data.statistic.T, cmap=cmap,norm=norm, origin='lower', extent=[RANGE[0][0], RANGE[0][1], RANGE[1][0], RANGE[1][1]])
+        im.set_clim(vmin, vmax)
+        im = axes[1].imshow(hist_data.statistic.T, cmap=cmap, norm=norm, origin='lower', extent=[RANGE[0][0], RANGE[0][1], RANGE[1][0], RANGE[1][1]])
+        colorbar = plt.colorbar(im, ax=axes)
+        im.set_clim(vmin, vmax)
+    fig.suptitle(figTitle)
+    
 
 def make_hist(array, bins, range_start, range_end):
     ### make histogram of charge
@@ -148,9 +211,10 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
     bin_centers, bin_contents, bin_error = make_hist(data*eV_per_e, nbins, range_start*eV_per_e,range_end*eV_per_e)
     return bin_centers, bin_contents, bin_error
 
-def plotRecoSpectrum(clusters, nbins=100, data_type='data', color='b', linewidth=1, label=None, linestyle=None, norm=None,plot_errorbars=False, useYlog=False, calibrate=True, bin_start=0):
+def plotRecoSpectrum(clusters, nbins=100, data_type='data', color='b', linewidth=1, label=None, linestyle=None, norm=None,plot_errorbars=False, useYlog=False, calibrate=True, bin_start=0, axes=None):
     ### plot reco spectrum
-    fig, axes = plt.subplots(nrows=1, ncols=1, sharex=False, sharey=False, figsize=(6,4))
+    if axes is None:
+        fig, axes = plt.subplots(nrows=1, ncols=1, sharex=False, sharey=False, figsize=(6,4))
     bin_centers, bin_contents, bin_error = get_hist_data(clusters, nbins, data_type, calibrate=calibrate, bin_start=bin_start)
     if norm == 'area':
         total_bin_contents = np.sum(bin_contents)
@@ -359,12 +423,16 @@ def matching_purity(clusters, q_bins=6, q_range=None, plot_vlines=True, plot_log
     axes[1][0].set_ylabel('Purity Fraction')
     axes[1][1].set_ylabel('Purity Fraction')
     axes[1][0].plot(q_for_plot, matching_purity_io1, 'bo', markersize=3,label='TPC1')
-    axes[1][0].errorbar(q_for_plot, matching_purity_io1, xerr=np.ones_like(q_for_plot)*(q_for_plot[1] - q_for_plot[0])/2,yerr=np.array(matching_purity_error_io1).transpose(),color='k',fmt='o',markersize = 0.5, linewidth=1)
+    if plot_bins > 1:
+        xerr=np.ones_like(q_for_plot)*(q_for_plot[1] - q_for_plot[0])/2
+    else:
+        xerr=None
+    axes[1][0].errorbar(q_for_plot, matching_purity_io1, xerr=xerr,yerr=np.array(matching_purity_error_io1).transpose(),color='k',fmt='o',markersize = 0.5, linewidth=1)
     #fig.suptitle('Purity Fraction of Real Charge-Light Matched Charge Clusters \n (module-1, 5 hrs of data, 2022_02_08)')
     axes[1][1].set_xlabel('Charge [ke-]')
     axes[1][0].set_xlabel('Charge [ke-]')
     axes[1][1].plot(q_for_plot, matching_purity_io2, 'bo', markersize=3, label='TPC2')
-    axes[1][1].errorbar(q_for_plot, matching_purity_io2, xerr=np.ones_like(q_for_plot)*(q_for_plot[1] - q_for_plot[0])/2,yerr=np.array(matching_purity_error_io2).transpose(),color='k',fmt='o',markersize = 0.5, linewidth=1)
+    axes[1][1].errorbar(q_for_plot, matching_purity_io2, xerr=xerr,yerr=np.array(matching_purity_error_io2).transpose(),color='k',fmt='o',markersize = 0.5, linewidth=1)
 
 def get_charge_MC(nFiles_dict, folders_MC, filename_ending_MC, nbins, do_calibration, recomb_filename,disable_alphas=False, disable_gammas=False, disable_betas=False):
     # Isotope ratios
