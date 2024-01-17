@@ -80,7 +80,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                     ('voltage_adc1', 'i4', (nchannels, samples)), ('voltage_adc2', 'i4', (nchannels, samples))])
     light_events_all = np.zeros((0,), dtype=light_events_dtype)
     
-    batch_size = 50
+    batch_size = 25
     batch_index = 0
     first_batch = True
     
@@ -99,7 +99,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     z_drift_factor = 10*consts.v_drift/1e3
 
     # loop through light triggers
-    #for i in tqdm(range(1000), desc=' Matching clusters to light events: '):
+    #for i in tqdm(range(10000), desc=' Matching clusters to light events: '):
     for i in tqdm(range(len(tai_ns_adc1)), desc=' Matching clusters to light events: '):
         light_tai_ns_mask = (tai_ns_adc2 > tai_ns_adc1[i] - tai_ns_tolerance) & ((tai_ns_adc2 < tai_ns_adc1[i] + tai_ns_tolerance))
         light_unix_mask = (unix_adc2 > unix_adc1[i] - unix_tolerance) & ((unix_adc2 < unix_adc1[i] + unix_tolerance))
@@ -196,25 +196,29 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
 
     # calculate z_drift and put z_drift and t0 into clusters dataset
     with h5py.File(output_filename, 'a') as output_file:
+        tai_ns_all = np.array(output_file['light_events']['tai_ns'])
         for i in tqdm(range(len(clusters_keep))):
-            light_indices = np.array(clusters_keep[i]['light_trig_index'])
+            cluster_light_trig_index = clusters_keep[i]['light_trig_index']
+            light_indices = np.array(cluster_light_trig_index)
             
             if sum(light_indices != -1) == 1:
-                light_index = clusters_keep[i]['light_trig_index'][0]
+                light_index = cluster_light_trig_index[0]
             else:
                 ns_diff = []
                 for j, idx in enumerate(light_indices[light_indices != -1]):
-                    ns_diff.append(abs(output_file['light_events'][idx]['tai_ns'] - clusters_keep[i]['t_mid']))
+                    ns_diff.append(abs(tai_ns_all[idx] - clusters_keep[i]['t_mid']))
                 light_index = light_indices[np.argmin(ns_diff)]
 
-            tai_ns = output_file['light_events'][light_index]['tai_ns']
-            if clusters_keep[i]['z_anode'] < 0:
+            z_anode_i = clusters_keep[i]['z_anode']
+            tai_ns = tai_ns_all[light_index]
+            if z_anode_i < 0:
                 sign = 1
             else:
                 sign = -1
-            z_drift_min = clusters_keep[i]['z_anode'] + sign*(clusters_keep[i]['t_min'] - tai_ns).astype('f8')*z_drift_factor
-            z_drift_mid = clusters_keep[i]['z_anode'] + sign*(clusters_keep[i]['t_mid'] - tai_ns).astype('f8')*z_drift_factor
-            z_drift_max = clusters_keep[i]['z_anode'] + sign*(clusters_keep[i]['t_max'] - tai_ns).astype('f8')*z_drift_factor
+            
+            z_drift_min = z_anode_i + sign*(clusters_keep[i]['t_min'] - tai_ns).astype('f8')*z_drift_factor
+            z_drift_mid = z_anode_i + sign*(clusters_keep[i]['t_mid'] - tai_ns).astype('f8')*z_drift_factor
+            z_drift_max = z_anode_i + sign*(clusters_keep[i]['t_max'] - tai_ns).astype('f8')*z_drift_factor
             np.put(clusters_keep['z_drift_mid'], i, z_drift_min)
             np.put(clusters_keep['z_drift_min'], i, z_drift_mid)
             np.put(clusters_keep['z_drift_max'], i, z_drift_max)
