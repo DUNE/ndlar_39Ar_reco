@@ -36,6 +36,8 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
     xyz_values, ts_inmm, charge = [], [], []
     v_ped, v_cm, v_ref, unique_ids = [], [], [], []
     packets_keep_mask = np.zeros(len(packets), dtype=bool)
+    len_keys = len(list(pixel_xy.keys())[0])
+    total_keyerrors = 0
     for i in range(len(packets['io_channel'])):
         if packets[i]['io_group'] % 2 == 1:
             io_group = 1
@@ -45,7 +47,7 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
         chip_id = packets[i]['chip_id']
         channel_id = packets[i]['channel_id']
         unique_id = ((io_group * 256 + io_channel) * 256 + chip_id)*64 + channel_id
-        if len(list(pixel_xy.keys())[0]) == 4:
+        if len_keys == 4:
             dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
         else:
             dict_values = pixel_xy.get((chip_id, channel_id))
@@ -70,8 +72,10 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
                 else:
                     charge.append(adcs_to_mV(packets[i]['dataword'], v_ref_sim,\
                                v_cm_sim, v_pedestal_sim))
-        #else:
-        #    print(f'KeyError {(packets[i]['io_group'], packets[i]['io_channel'], packets[i]['chip_id'], packets[i]['channel_id'])}')
+        else:
+            #print(f'KeyError {(io_group, io_channel, chip_id, channel_id)}')
+            total_keyerrors += 1
+    #print(f'Fraction of keyerrors = {total_keyerrors/len(packets)}')
     xyz_values = np.array(xyz_values)
     ts_inmm = np.array(ts_inmm)
     charge = np.array(charge)
