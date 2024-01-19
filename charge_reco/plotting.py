@@ -8,37 +8,57 @@ from tqdm import tqdm
 from scipy import stats
 import matplotlib.colors as mcolors
 
-def XY_Hist2D(clusters, figTitle=None, vmin=1e0, vmax=1e3, use_z_cut=True):
+def XY_Hist2D(clusters, figTitle=None, vmin=1e0, vmax=1e3, use_z_cut=True, isSingleCube=False):
     ### plot 2D histogram of clusters
-    y_min_max = [-620,620]
-    x_min_max = [-310,310]
-    x_bins = 140
-    y_bins = 2*x_bins
-    fig, axes = plt.subplots(nrows=1, ncols=2, sharex=False, sharey=False, figsize=(8,6))
+    if isSingleCube:
+        y_min_max = [-155,155]
+        x_min_max = [-155,155]
+        x_bins = 70
+        y_bins = x_bins
+        ncols=1
+    else:
+        y_min_max = [-620,620]
+        x_min_max = [-310,310]
+        x_bins = 140
+        y_bins = 2*x_bins
+        ncols=2
+    fig, axes = plt.subplots(nrows=1, ncols=ncols, sharex=False, sharey=False, figsize=(8,6))
     cmap = plt.cm.jet
     z_anode_max = np.max(clusters['z_anode'])
     z_anode_min = np.min(clusters['z_anode'])
-    if not use_z_cut:
-        TPC1_mask = (clusters['z_anode'] < 0)
-        TPC2_mask = (clusters['z_anode'] > 0)
+    if isSingleCube:
+        H1 = axes.hist2d(clusters['x_mid'], clusters['y_mid'], range=[x_min_max, y_min_max],bins = [x_bins,y_bins], weights=np.ones_like(clusters['x_mid']),norm = colors.LogNorm(vmin=vmin,vmax=vmax))
+        fig.colorbar(H1[3], ax=axes)
+        
+        #axes[0].set_title(f'TPC 1')
+        fig.suptitle(figTitle, fontsize=10)
+        axes.set_xlabel(r'$x_{reco}$ [mm]')
+        axes.set_ylabel(r'$y_{reco}$ [mm]')
+        axes.set_ylim(y_min_max[0], y_min_max[1])
+        axes.set_xlim(x_min_max[0], x_min_max[1])
     else:
-        TPC1_mask = (clusters['z_anode'] < 0) & (clusters['z_drift_mid'] > z_anode_min) & (clusters['z_drift_mid'] < 0)
-        TPC2_mask = (clusters['z_anode'] > 0) & (clusters['z_drift_mid'] < z_anode_max) & (clusters['z_drift_mid'] > 0)
+        if not use_z_cut:
+            TPC1_mask = (clusters['z_anode'] < 0)
+            TPC2_mask = (clusters['z_anode'] > 0)
+        else:
+            TPC1_mask = (clusters['z_anode'] < 0) & (clusters['z_drift_mid'] > z_anode_min) & (clusters['z_drift_mid'] < 0)
+            TPC2_mask = (clusters['z_anode'] > 0) & (clusters['z_drift_mid'] < z_anode_max) & (clusters['z_drift_mid'] > 0)
 
-    H1 = axes[0].hist2d(clusters['x_mid'][TPC1_mask], clusters['y_mid'][TPC1_mask], range=[x_min_max, y_min_max],bins = [x_bins,y_bins], weights=np.ones_like(clusters['x_mid'][TPC1_mask]),norm = colors.LogNorm(vmin=vmin,vmax=vmax))
-    fig.colorbar(H1[3], ax=axes[0])
-    H2 = axes[1].hist2d(clusters['x_mid'][TPC2_mask], clusters['y_mid'][TPC2_mask], range=[x_min_max, y_min_max], bins = [x_bins,y_bins], weights=np.ones_like(clusters['x_mid'][TPC2_mask]),norm = colors.LogNorm(vmin=vmin,vmax=vmax))
-    fig.colorbar(H2[3], ax=axes[1])
-    axes[0].set_title(f'TPC 1')
-    axes[1].set_title(f'TPC 2')
-    fig.suptitle(figTitle, fontsize=10)
-    axes[0].set_xlabel(r'$x_{reco}$ [mm]')
-    axes[1].set_xlabel(r'$x_{reco}$ [mm]')
-    axes[0].set_ylabel(r'$y_{reco}$ [mm]')
-    axes[0].set_ylim(y_min_max[0], y_min_max[1])
-    axes[0].set_xlim(x_min_max[0], x_min_max[1])
-    axes[1].set_ylim(y_min_max[0], y_min_max[1])
-    axes[1].set_xlim(x_min_max[0], x_min_max[1])
+        H1 = axes[0].hist2d(clusters['x_mid'][TPC1_mask], clusters['y_mid'][TPC1_mask], range=[x_min_max, y_min_max],bins = [x_bins,y_bins], weights=np.ones_like(clusters['x_mid'][TPC1_mask]),norm = colors.LogNorm(vmin=vmin,vmax=vmax))
+        fig.colorbar(H1[3], ax=axes[0])
+        H2 = axes[1].hist2d(clusters['x_mid'][TPC2_mask], clusters['y_mid'][TPC2_mask], range=[x_min_max, y_min_max], bins = [x_bins,y_bins], weights=np.ones_like(clusters['x_mid'][TPC2_mask]),norm = colors.LogNorm(vmin=vmin,vmax=vmax))
+        
+        fig.colorbar(H2[3], ax=axes[1])
+        axes[0].set_title(f'TPC 1')
+        axes[1].set_title(f'TPC 2')
+        fig.suptitle(figTitle, fontsize=10)
+        axes[0].set_xlabel(r'$x_{reco}$ [mm]')
+        axes[1].set_xlabel(r'$x_{reco}$ [mm]')
+        axes[0].set_ylabel(r'$y_{reco}$ [mm]')
+        axes[0].set_ylim(y_min_max[0], y_min_max[1])
+        axes[0].set_xlim(x_min_max[0], x_min_max[1])
+        axes[1].set_ylim(y_min_max[0], y_min_max[1])
+        axes[1].set_xlim(x_min_max[0], x_min_max[1])
     plt.show()
 
 def XZ_Hist2D(clusters, figTitle=None, logYscale=False, vmin=1, vmax=1e3, weight_type=None):
@@ -78,10 +98,14 @@ def XZ_Hist2D(clusters, figTitle=None, logYscale=False, vmin=1, vmax=1e3, weight
 
     plt.show()
 
-def plot_2D_statistic(clusters, values, stat, plot_type, xlabel=None, ylabel=None, figTitle=None, vmin=None, vmax=None, log_scale=False):
+def plot_2D_statistic(clusters, values, stat, plot_type, xlabel=None, ylabel=None, figTitle=None, vmin=None, vmax=None, log_scale=False, isSingleCube=False):
     if plot_type == 'xy':
-        ncols=2
-        figsize=(8,6)
+        if isSingleCube:
+            ncols=1
+            figsize=(8,6)
+        else:
+            ncols=2
+            figsize=(8,6)
     elif plot_type == 'xz':
         ncols=1
         figsize=(8,6)
@@ -99,18 +123,29 @@ def plot_2D_statistic(clusters, values, stat, plot_type, xlabel=None, ylabel=Non
         axes.set_ylim(RANGE[0], RANGE[1])
         axes.set_xlim(RANGE[0], RANGE[1])
     elif plot_type == 'xy':
-        y_min_max = [-620,620]
-        x_min_max = [-310,310]
-        RANGE=[x_min_max, y_min_max]
-        x_bins = 140
-        y_bins = 2*x_bins
-        axes[0].set_xlabel(r'$x_{reco}$ [mm]')
-        axes[1].set_xlabel(r'$x_{reco}$ [mm]')
-        axes[0].set_ylabel(r'$y_{reco}$ [mm]')
-        axes[0].set_ylim(y_min_max[0], y_min_max[1])
-        axes[0].set_xlim(x_min_max[0], x_min_max[1])
-        axes[1].set_ylim(y_min_max[0], y_min_max[1])
-        axes[1].set_xlim(x_min_max[0], x_min_max[1])
+        if isSingleCube:
+            y_min_max = [-155,155]
+            x_min_max = [-155,155]
+            RANGE=[x_min_max, y_min_max]
+            x_bins = 70
+            y_bins = x_bins
+            axes.set_xlabel(r'$x_{reco}$ [mm]')
+            axes.set_ylabel(r'$y_{reco}$ [mm]')
+            axes.set_ylim(y_min_max[0], y_min_max[1])
+            axes.set_xlim(x_min_max[0], x_min_max[1])
+        else:
+            y_min_max = [-620,620]
+            x_min_max = [-310,310]
+            RANGE=[x_min_max, y_min_max]
+            x_bins = 140
+            y_bins = 2*x_bins
+            axes[0].set_xlabel(r'$x_{reco}$ [mm]')
+            axes[1].set_xlabel(r'$x_{reco}$ [mm]')
+            axes[0].set_ylabel(r'$y_{reco}$ [mm]')
+            axes[0].set_ylim(y_min_max[0], y_min_max[1])
+            axes[0].set_xlim(x_min_max[0], x_min_max[1])
+            axes[1].set_ylim(y_min_max[0], y_min_max[1])
+            axes[1].set_xlim(x_min_max[0], x_min_max[1])
     if plot_type == 'xy':
         hist_data = stats.binned_statistic_2d(clusters['x_mid'], clusters['y_mid'], values, statistic=stat, bins=[x_bins,y_bins], range=RANGE)
     elif plot_type == 'xz':
@@ -125,9 +160,13 @@ def plot_2D_statistic(clusters, values, stat, plot_type, xlabel=None, ylabel=Non
         colorbar = plt.colorbar(im, ax=axes)
         im.set_clim(vmin, vmax)
     elif plot_type == 'xy':
-        im = axes[0].imshow(hist_data.statistic.T, cmap=cmap,norm=norm, origin='lower', extent=[RANGE[0][0], RANGE[0][1], RANGE[1][0], RANGE[1][1]])
-        im.set_clim(vmin, vmax)
-        im = axes[1].imshow(hist_data.statistic.T, cmap=cmap, norm=norm, origin='lower', extent=[RANGE[0][0], RANGE[0][1], RANGE[1][0], RANGE[1][1]])
+        if isSingleCube:
+            im = axes.imshow(hist_data.statistic.T, cmap=cmap,norm=norm, origin='lower', extent=[RANGE[0][0], RANGE[0][1], RANGE[1][0], RANGE[1][1]])
+            im.set_clim(vmin, vmax)
+        else:
+            im = axes[0].imshow(hist_data.statistic.T, cmap=cmap,norm=norm, origin='lower', extent=[RANGE[0][0], RANGE[0][1], RANGE[1][0], RANGE[1][1]])
+            im.set_clim(vmin, vmax)
+            im = axes[1].imshow(hist_data.statistic.T, cmap=cmap, norm=norm, origin='lower', extent=[RANGE[0][0], RANGE[0][1], RANGE[1][0], RANGE[1][1]])
         colorbar = plt.colorbar(im, ax=axes)
         im.set_clim(vmin, vmax)
     fig.suptitle(figTitle)
@@ -207,7 +246,7 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
         data = data/np.interp(data, charge_ke, recombination)
     
     # get histogram parameters
-    nbins = int(bins/2)
+    nbins = int(bins)
     bin_centers, bin_contents, bin_error = make_hist(data*eV_per_e, nbins, range_start*eV_per_e,range_end*eV_per_e)
     return bin_centers, bin_contents, bin_error
 
