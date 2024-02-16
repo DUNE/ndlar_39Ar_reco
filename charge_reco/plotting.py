@@ -198,7 +198,15 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
     
     v_cm_data = 288.28125
     v_ref_data = 1300.78125
-    
+    if DET == 'module-0':
+        v_cm_data = 288.28125
+        v_ref_data = 1300.78125
+    elif DET == 'module-1':
+        v_cm_data = 284.27734375
+        v_ref_data = 1282.71484375
+    else:
+        v_cm_data = 288.28125
+        v_ref_data = 1300.78125 
     # module-2
     #v_cm_data = 438.28125
     #v_ref_data = 1437.3046875
@@ -226,9 +234,9 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
     
     # add small +/- offset in MC for fix binning issues
     offset = np.zeros_like(data)
-    if data_type == 'MC':
+    if data_type == 'MC' or data_type == 'data':
         MC_size = len(data)
-        offset = scipy.stats.uniform.rvs(loc=0, scale=1, size=MC_size)*width*np.random.choice([-0.5,0.5], size=MC_size, p=[.5, .5])
+        offset = stats.uniform.rvs(loc=0, scale=1, size=MC_size)*width*np.random.choice([-0.5,0.5], size=MC_size, p=[.5, .5])
         data += offset
     if binwidth is not None:
         width = binwidth
@@ -249,12 +257,13 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
     nbins = int(bins)
     bin_centers, bin_contents, bin_error = make_hist(data*eV_per_e, nbins, range_start*eV_per_e,range_end*eV_per_e)
     return bin_centers, bin_contents, bin_error
-
-def plotRecoSpectrum(clusters, nbins=100, data_type='data', color='b', linewidth=1, label=None, linestyle=None, norm=None,plot_errorbars=False, useYlog=False, calibrate=True, bin_start=0, axes=None):
+def plotRecoSpectrum(clusters, nbins=100, data_type='data', color='b', linewidth=1, label=None, linestyle=None, norm=None,plot_errorbars=False, useYlog=False
+, calibrate=True, bin_start=0, axes=None, recomb_filename=None, DET=None, figTitle=None, saveFig=False, fileName=None)
     ### plot reco spectrum
     if axes is None:
         fig, axes = plt.subplots(nrows=1, ncols=1, sharex=False, sharey=False, figsize=(6,4))
-    bin_centers, bin_contents, bin_error = get_hist_data(clusters, nbins, data_type, calibrate=calibrate, bin_start=bin_start)
+    bin_centers, bin_contents, bin_error = get_hist_data(clusters, nbins, data_type, calibrate=calibrate, bin_start=bin_start, recomb_filename=recomb_filenam
+e, DET=DET)
     if norm == 'area':
         total_bin_contents = np.sum(bin_contents)
         bin_contents = bin_contents / total_bin_contents
@@ -267,10 +276,12 @@ def plotRecoSpectrum(clusters, nbins=100, data_type='data', color='b', linewidth
         axes.set_ylabel('bin count / max bin count')
     else:
         axes.set_ylabel('bin count')
-    if calibrate:
+    if calibrate and recomb_filename is None:
         axes.set_xlabel('Charge [ke-]')
-    else:
+    elif not calibrate and recomb_filename is None:
         axes.set_xlabel('Charge [mV]')
+    elif calibrate and recomb_filename is not None:
+        axes.set_xlabel('Cluster Energy [keV]')
     axes.step(bin_centers, bin_contents, linewidth=linewidth, color=color,linestyle=linestyle, where='mid',alpha=0.7, label=label)
     if useYlog:
         axes.set_yscale('log')
@@ -316,8 +327,7 @@ def poisson_interval(k, alpha=0.05):
         low = 0.0
     return low, high
 
-def matching_purity(clusters, q_bins=6, q_range=None, plot_vlines=True, plot_log_scale=False, plot_legend=True):
-    
+def matching_purity(clusters, q_bins=6, q_range=None, plot_vlines=True, plot_log_scale=False, plot_legend=True, figTitle=None, saveFig=False, fileName=None): 
     fig, axes = plt.subplots(nrows=2, ncols=2, sharex=False, sharey=False, figsize=(10,8))
     q_io1 = clusters[clusters['io_group'] == 1]['q']*221*1e-3
     q_io2 = clusters[clusters['io_group'] == 2]['q']*221*1e-3
@@ -330,7 +340,7 @@ def matching_purity(clusters, q_bins=6, q_range=None, plot_vlines=True, plot_log
     else:
         q_min_max = [q_range[0], q_range[1]]
     plot_binsize = (q_min_max[1] - q_min_max[0])/plot_bins
-    interval = 0.68
+    interval = 0.683
 
     matching_purity_io1, matching_purity_io2 = [], []
     matching_purity_error_io1, matching_purity_error_io2 = [], []
@@ -343,7 +353,7 @@ def matching_purity(clusters, q_bins=6, q_range=None, plot_vlines=True, plot_log
 
     Range_io2 = [-400, 600]
     Range_io1 = [-600, 400]
-    nbins = 50
+    nbins = 150
     
     max_bins_io1 = []
     max_bins_io2 = []
@@ -446,9 +456,8 @@ def matching_purity(clusters, q_bins=6, q_range=None, plot_vlines=True, plot_log
         axes[0][1].legend(fontsize=4.5, loc='upper left')
         axes[0][0].legend(fontsize=4.5, loc='upper left')
     
-    
-    axes[0][0].set_xlabel(r'$z_{reco}$ [mm]')
-    axes[0][1].set_xlabel(r'$z_{reco}$ [mm]')
+    axes[0][0].set_xlabel(r'Reconstructed Drift Coordinate [mm]')
+    axes[0][1].set_xlabel(r'Reconstructed Drift Coordinate [mm]') 
     axes[0][1].set_ylabel('Counts')
     axes[0][0].set_ylabel('Counts')
     
@@ -472,7 +481,9 @@ def matching_purity(clusters, q_bins=6, q_range=None, plot_vlines=True, plot_log
     axes[1][0].set_xlabel('Charge [ke-]')
     axes[1][1].plot(q_for_plot, matching_purity_io2, 'bo', markersize=3, label='TPC2')
     axes[1][1].errorbar(q_for_plot, matching_purity_io2, xerr=xerr,yerr=np.array(matching_purity_error_io2).transpose(),color='k',fmt='o',markersize = 0.5, linewidth=1)
-
+    fig.suptitle(figTitle)
+    if saveFig:
+        plt.savefig(fileName)
 def get_charge_MC(nFiles_dict, folders_MC, filename_ending_MC, nbins, do_calibration, recomb_filename,disable_alphas=False, disable_gammas=False, disable_betas=False):
     # Isotope ratios
     isotopes_ratios_betas_gammas = { 
