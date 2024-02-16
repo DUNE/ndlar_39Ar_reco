@@ -153,6 +153,7 @@ def apply_data_cuts(input_config_name, *input_filepath):
         
         if N_files > 1:
             combined_output_filepath = f"tagged_clusters_with_cuts_{input_config_name}.h5"
+            combined_output_filepath_justClusters = f"tagged_clusters_with_cuts_{input_config_name}_justClusters.h5"
             if os.path.exists(combined_output_filepath):
                 raise Exception('Output file '+ str(combined_output_filepath) + ' already exists.')
         if os.path.exists(output_filepath):
@@ -217,6 +218,8 @@ def apply_data_cuts(input_config_name, *input_filepath):
             pedestal_range = (0, 200)
             channel_range = (4, 64)
         
+        if input_config_name == 'module-1':
+            rows_to_use = [0,2]
         # make dictionaries of (adc_num, channel_num) keys with positions
         io0_dict_left = {}
         io0_dict_right = {}
@@ -236,12 +239,15 @@ def apply_data_cuts(input_config_name, *input_filepath):
                         io1_dict_right[(adc_id, channel_id)] = position
 
         # parameters for cuts
-        d = 80 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
-        hit_threshold = 1000
+        use_old_method = True
+        d_LCM = 75 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
+        d_ACL = 75
+        hit_threshold_LCM = 4000
+        hit_threshold_ACL = 4000
         hit_upper_bound = 1e9
         rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
-        opt_cut_shape = 'rect' # proximity cut type. Options: 'ellipse', 'circle', 'rect'.
-        ellipse_b = 100 # ellipse semi-minor axis in mm
+        opt_cut_shape = 'ellipse' # proximity cut type. Options: 'ellipse', 'circle', 'rect'.
+        ellipse_b = 150 # ellipse semi-minor axis in mm
         clusters = np.array(f_in['clusters'])
 
         # Remove single hit clusters that come from noisy channels
@@ -264,30 +270,70 @@ def apply_data_cuts(input_config_name, *input_filepath):
             # apply a cut on channels with a rate above a threshold. This should remove most if not all of the 
             # noisy channels with the optimal cut. Obviously be careful not to set the threshold too low otherwise
             # you run the risk of cutting out well-behaving channels.
-            single_hit_clusters = clusters_file['clusters'][clusters_file['clusters']['nhit'] == 1]
-            combined_dstack = np.dstack((single_hit_clusters['x_mid'], single_hit_clusters['y_mid'], \
-                                         single_hit_clusters['z_anode']))[0]
+            
+            if not use_old_method:
+                single_hit_clusters = clusters_file['clusters'][clusters_file['clusters']['nhit'] == 1]
+                combined_dstack = np.dstack((single_hit_clusters['x_mid'], single_hit_clusters['y_mid'], \
+                                             single_hit_clusters['z_anode']))[0]
 
-            from collections import Counter
-            runtime_seconds = abs(np.max(single_hit_clusters['unix']) - np.min(single_hit_clusters['unix']))
-            # count occurrences of each unique tuple of x,y, and z
-            count_dict = Counter([tuple(row) for row in combined_dstack])
-            tuples_to_remove = np.array(list(count_dict.keys()))[np.array(list(count_dict.values()))/(runtime_seconds) > rate_threshold]
-            print(f'File runtime = {(runtime_seconds/60):.3f} minutes')
-            print(f'{len(tuples_to_remove)} channels disabled.')
-            print(f'{(100*len(tuples_to_remove)/len(list(count_dict.keys()))):.4f} percentage of channels disabled.')
+                from collections import Counter
+                runtime_seconds = abs(np.max(single_hit_clusters['unix']) - np.min(single_hit_clusters['unix']))
+                # count occurrences of each unique tuple of x,y, and z
+                count_dict = Counter([tuple(row) for row in combined_dstack])
+                tuples_to_remove = np.array(list(count_dict.keys()))[np.array(list(count_dict.values()))/(runtime_seconds) > rate_threshold]
+                print(f'File runtime = {(runtime_seconds/60):.3f} minutes')
+                print(f'{len(tuples_to_remove)} channels disabled.')
+                print(f'{(100*len(tuples_to_remove)/len(list(count_dict.keys()))):.4f} percentage of channels disabled.')
 
-            print('Removing clusters from noisy channels...')
-            # remove 1-hit clusters that come from channel to remove
-            for key in tuples_to_remove:
-                mask = (single_hit_clusters['x_mid'] == key[0]) & (single_hit_clusters['y_mid'] == key[1]) \
-                        & (single_hit_clusters['z_anode'] == key[2])
-                clusters = clusters[~np.isin(clusters['id'], single_hit_clusters[mask]['id'])]
-            # clear memory before moving on
-            combined_dstack=0
-            single_hit_clusters=0
-            mask=0
-            count_dict=0
+                print('Removing clusters from noisy channels...')
+                # remove 1-hit clusters that come from channel to remove
+                for key in tuples_to_remove:
+                    mask = (single_hit_clusters['x_mid'] == key[0]) & (single_hit_clusters['y_mid'] == key[1]) \
+                            & (single_hit_clusters['z_anode'] == key[2])
+                    clusters = clusters[~np.isin(clusters['id'], single_hit_clusters[mask]['id'])]
+                # clear memory before moving on
+                combined_dstack=0
+                single_hit_clusters=0
+                mask=0
+                count_dict=0
+            else:
+                # find hit count per channel
+                clusters_all = clusters_file['clusters'][clusters_file['clusters']['nhit'] <= 10]
+                hits = clusters_file['hits'][np.isin(clusters_file['hits']['cluster_index'], clusters_all['id'])]
+                hit_ids = hits['unique_id']
+                hits_channel_count = np.bincount(hit_ids)
+                hits_channel_indices = np.arange(0, len(hits_channel_count), 1)
+                hits_channel_count = hits_channel_count[np.min(hit_ids):np.max(hit_ids)]
+                hits_channel_indices = hits_channel_indices[np.min(hit_ids):np.max(hit_ids)]
+                hits_channel_indices = hits_channel_indices[hits_channel_count != 0]
+                hits_channel_count = hits_channel_count[hits_channel_count != 0]
+                
+                # calculate hit rate per channel
+                total_time_seconds = np.max(hits['unix']) - np.min(hits['unix'])
+                hits_channel_rate = hits_channel_count/total_time_seconds
+                #print('Rate of hits in detector = ',len(hits)/total_time_seconds, ' Hz')
+                
+                hit_rate_cut = rate_threshold
+                rate_cut_mask = hits_channel_rate < hit_rate_cut
+                hits_channel_indices_keep = hits_channel_indices[rate_cut_mask]
+                hits_channel_indices_cut = hits_channel_indices[np.invert(rate_cut_mask)]
+                
+                # find hits that have hit-rate less than hit rate cut
+                # note we only need to loop through the channels we want to disable
+                hit_mask_all = np.zeros(len(hits), dtype=bool)
+                for i in tqdm(range(len(hits_channel_indices_cut))):
+                    hit_mask = hits_channel_indices_cut[i] == hits['unique_id']
+                    hit_mask_all += hit_mask
+                hits_rate_cut_keep = hits[np.invert(hit_mask_all)]
+                hits_rate_cut_remove = hits[hit_mask_all]
+                
+                cluster_indices_rate_cut = np.unique(hits_rate_cut_keep['cluster_index'])
+                total_clusters = len(clusters)
+                print(f'len(cluster_indices_rate_cut) = {len(cluster_indices_rate_cut)}')
+                clusters = clusters[np.isin(clusters['id'], cluster_indices_rate_cut)]
+                print('Percentage of clusters removed: ', len(clusters) / total_clusters * 100)
+                clusters_all=0
+                hits=0
         print(' ')
         
         light_ids = np.array(clusters['light_trig_index'])
@@ -327,7 +373,7 @@ def apply_data_cuts(input_config_name, *input_filepath):
         if use_light_proximity_cut:
             # Note that the way this is designed now, it is a bit memory intensive (3-7GB), so 
             # make sure this is run somewhere with ample memory.
-            print(f'Applying optical proximity cut with {hit_threshold} ADC hit-threshold ...')
+            print(f'Applying optical proximity cut with {hit_threshold_LCM} ADC hit-threshold for LCM, {hit_threshold_ACL} ADC hit-threshold for ACL ...')
             #light_events = f_in['light_events']
             #wvfms_adc1 = f_in['light_events']['voltage_adc1']
             #wvfms_adc2 = f_in['light_events']['voltage_adc2']
@@ -374,11 +420,12 @@ def apply_data_cuts(input_config_name, *input_filepath):
                 for light_event in light_events:
                     # only match light trig to clusters of same unix second
                     light_unix_s = light_event['unix']
+                    light_tai_ns = light_event['tai_ns']
                     try:
                         start_index, stop_index = unix_chunk_indices[int(light_unix_s)]
                     except:
                         continue
-                    clusters_chunk = clusters[start_index:stop_index+1]
+                    clusters_chunk = clusters[start_index:stop_index]
                 
                     light_hit_index_local = 0
                     # loop through columns of p.detector tiles
@@ -387,6 +434,12 @@ def apply_data_cuts(input_config_name, *input_filepath):
                         for j in range(4):
                             # optionally skip some rows, like for module-0 ACLs
                             if j in rows_to_use and (j,i) not in row_column_to_remove:
+                                if j in [0,2]:
+                                    hit_threshold = hit_threshold_LCM
+                                    d = d_LCM
+                                else:
+                                    hit_threshold = hit_threshold_ACL
+                                    d = d_ACL
                                 #print(f'(i,j) = {(i,j)}')
                                 plot_to_adc_channel = list(plot_to_adc_channel_dict[i].values())[j]
 
@@ -400,20 +453,23 @@ def apply_data_cuts(input_config_name, *input_filepath):
                                     wvfm_max = 0
 
                                 # only keep events with a summed waveform above the threshold
-                                if wvfm_max > hit_threshold and wvfm_max < hit_upper_bound:
+                                if wvfm_max > hit_threshold:
                                     if tile_position[2] < 0:
                                         tpc_id = 1
                                     else:
                                         tpc_id = 2
                                     hit_to_clusters_dist = np.sqrt((clusters_chunk['x_mid'] - tile_position[0])**2 + \
                                                                    (clusters_chunk['y_mid'] - tile_position[1])**2)
+                                    temporal_proximity_mask = (clusters_chunk['t_mid'] > light_tai_ns - 400000) \
+                                        & (clusters_chunk['t_mid'] < light_tai_ns + 400000) & (clusters_chunk['unix'] == light_unix_s)
                                     # can add additional optical cut shapes here as addition elif statements
                                     if opt_cut_shape == 'circle':
-                                        cluster_in_shape = (hit_to_clusters_dist < d) & (np.abs(clusters_chunk['x_mid']) < 315) \
-                                                           & (np.abs(clusters_chunk['y_mid']) < 630) & (clusters_chunk['io_group'] == tpc_id)
+                                        cluster_in_shape = (hit_to_clusters_dist < d) \
+                                        & (np.abs(clusters_chunk['x_mid']) < 315) \
+                                        & (np.abs(clusters_chunk['y_mid']) < 630) \
+                                        & (clusters_chunk['io_group'] == tpc_id)
                                     elif opt_cut_shape == 'ellipse':
-                                        cluster_in_shape = is_point_inside_ellipse(clusters_chunk['x_mid'], clusters_chunk['y_mid'], \
-                                                            tile_position[0], tile_position[1], d, ellipse_b)
+                                        cluster_in_shape = is_point_inside_ellipse(clusters_chunk['x_mid'], clusters_chunk['y_mid'],tile_position[0], tile_position[1], d, ellipse_b)
                                     elif opt_cut_shape == 'rect':
                                         if tile_position[0] < 0:
                                             cluster_in_shape = (clusters_chunk['x_mid'] < tile_position[0]+d) \
@@ -427,11 +483,13 @@ def apply_data_cuts(input_config_name, *input_filepath):
                                         raise ValueError('shape not supported')
                                     # Only save a cluster, and corresponding light waveforms, if it occurs 
                                     # within the confines of the shape relative to the center of the p.detector tile
-                                    #corner_mask  = ~(((clusters_chunk['y_mid'] >= 304.31) & (clusters_chunk['y_mid'] <= 600)) \
-                                    #            | ((clusters_chunk['y_mid'] <= 0) & (clusters_chunk['y_mid'] > -295)))
-                                    cluster_in_shape = cluster_in_shape #& corner_mask
-                                    clusters_mask[start_index:stop_index+1] += cluster_in_shape
-                                    clusters_light_hit_index[start_index:stop_index+1] = int(light_hit_index_local)
+                                    corner_mask  = ~(((clusters_chunk['y_mid'] >= 304.31) & (clusters_chunk['y_mid'] <= 600)) \
+                                                | ((clusters_chunk['y_mid'] <= 0) & (clusters_chunk['y_mid'] > -295)))
+                                    tpc_mask = clusters_chunk['io_group'] == tpc_id
+                                    #corner_mask = np.abs(clusters_chunk['z_drift_mid']) < 290
+                                    cluster_in_shape = cluster_in_shape & temporal_proximity_mask & ~corner_mask & tpc_mask
+                                    clusters_mask[start_index:stop_index] += cluster_in_shape
+                                    clusters_light_hit_index[start_index:stop_index] = int(light_hit_index_local)
                                     
                                     hit_summed = np.zeros((1,), dtype=light_hits_summed_dtype)
                                     hit_summed['light_trig_index'] = light_event['id']
@@ -570,7 +628,9 @@ def apply_data_cuts(input_config_name, *input_filepath):
                     f_out['light_hits_summed'][-light_hits_summed_data[i].shape[0]:] = light_hits_summed_data[i]
                     f_out['light_hits_SiPM'].resize((f_out['light_hits_SiPM'].shape[0] + light_hits_SiPM_data[i].shape[0]), axis=0)
                     f_out['light_hits_SiPM'][-light_hits_SiPM_data[i].shape[0]:] = light_hits_SiPM_data[i]
-                
+        with h5py.File(data_directory + '/' + combined_output_filepath_justClusters, 'w') as f_out:
+            f_out.create_dataset('clusters', data=combined_clusters_data_with_timestamps)
+        
         print(f"Combined file saved to {combined_output_filepath}")
 if __name__ == "__main__":
     fire.Fire(apply_data_cuts)
