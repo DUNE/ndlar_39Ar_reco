@@ -25,6 +25,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     # get clusters
     f_charge = h5py.File(input_clusters_file, 'r')
     clusters = np.array(f_charge['clusters'])
+    
     sorted_indices = np.argsort(clusters['unix'])
     clusters[:] = clusters[sorted_indices]
     
@@ -121,15 +122,16 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                 start_index, stop_index = unix_chunk_indices[int(light_unix_s)]
             except:
                 continue
-            clusters_chunk = clusters[start_index:stop_index+1]
-            
+            clusters_chunk = clusters[start_index:stop_index]
+            #print(f"unique unix = {np.unique(clusters_chunk['unix'], return_counts=True)}")
+            #print(" ")
             # match light trig to clusters
             matched_clusters_mask = (clusters_chunk['t_min'] > light_tai_ns - lower_PPS_window) & \
                                         (clusters_chunk['t_max'] < light_tai_ns + upper_PPS_window)
             indices_of_clusters = np.where(matched_clusters_mask)[0]
             
             # keep only matched light events, and keep track of indices for associations
-            clusters_nhit = 0
+            clusters_nhit = []
             if len(indices_of_clusters) > 0:
                 indices_of_clusters = np.array(indices_of_clusters) + start_index
                 # log index of light trig in each cluster
@@ -139,10 +141,10 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                         if clusters_new[index]['light_trig_index'][I] == -1:
                             clusters_new[index]['light_trig_index'][I] = light_trig_index
                             break
-                    clusters_nhit += clusters_new[index]['nhit']
+                    clusters_nhit.append(clusters_new[index]['nhit'])
                 nClustersLimit = len(indices_of_clusters) <= max_clusters
                 # require limit on number of hits per cluster in match
-                nHitsLimit = clusters_nhit <= max_hits
+                nHitsLimit = np.all(np.array(clusters_nhit) <= max_hits)
                 
                 if light_trig_index == 0 and nClustersLimit and nHitsLimit:
                     clusters_keep = clusters_new[indices_of_clusters]
@@ -194,35 +196,24 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
             output_file['light_events'].resize((output_file['light_events'].shape[0] + light_events_all.shape[0]), axis=0)
             output_file['light_events'][-light_events_all.shape[0]:] = light_events_all
 
-    # calculate z_drift and put z_drift and t0 into clusters dataset
     with h5py.File(output_filename, 'a') as output_file:
         tai_ns_all = np.array(output_file['light_events']['tai_ns'])
-        for i in tqdm(range(len(clusters_keep))):
-            cluster_light_trig_index = clusters_keep[i]['light_trig_index']
-            light_indices = np.array(cluster_light_trig_index)
-            
-            if sum(light_indices != -1) == 1:
-                light_index = cluster_light_trig_index[0]
-            else:
-                ns_diff = []
-                for j, idx in enumerate(light_indices[light_indices != -1]):
-                    ns_diff.append(abs(tai_ns_all[idx] - clusters_keep[i]['t_mid']))
-                light_index = light_indices[np.argmin(ns_diff)]
-
-            z_anode_i = clusters_keep[i]['z_anode']
-            tai_ns = tai_ns_all[light_index]
-            if z_anode_i < 0:
-                sign = 1
-            else:
-                sign = -1
-            
-            z_drift_min = z_anode_i + sign*(clusters_keep[i]['t_min'] - tai_ns).astype('f8')*z_drift_factor
-            z_drift_mid = z_anode_i + sign*(clusters_keep[i]['t_mid'] - tai_ns).astype('f8')*z_drift_factor
-            z_drift_max = z_anode_i + sign*(clusters_keep[i]['t_max'] - tai_ns).astype('f8')*z_drift_factor
-            np.put(clusters_keep['z_drift_mid'], i, z_drift_min)
-            np.put(clusters_keep['z_drift_min'], i, z_drift_mid)
-            np.put(clusters_keep['z_drift_max'], i, z_drift_max)
-            np.put(clusters_keep['t0'], i, tai_ns)
+        one_match_mask = (clusters_keep['light_trig_index'] != -1).sum(axis=1) == 1
+        
+        # for clusters with one light trig match, get array of associated light trig indices
+        cluster_light_trig_indices_one_match = np.array(clusters_keep[one_match_mask]['light_trig_index'][:,0])
+        z_anode_one_match = clusters_keep[one_match_mask]['z_anode']
+        tai_ns_one_match = tai_ns_all[cluster_light_trig_indices_one_match]
+        
+        # calculate z_drift values and place in clusters array
+        sign = np.zeros(len(z_anode_one_match), dtype=int)
+        sign[z_anode_one_match < 0] = 1
+        sign[z_anode_one_match > 0] = -1
+        clusters_keep['z_drift_min'][one_match_mask] = z_anode_one_match + sign*(clusters_keep[one_match_mask]['t_min'] - tai_ns_one_match).astype('f8')*z_drift_factor
+        clusters_keep['z_drift_mid'][one_match_mask] = z_anode_one_match + sign*(clusters_keep[one_match_mask]['t_mid'] - tai_ns_one_match).astype('f8')*z_drift_factor
+        clusters_keep['z_drift_max'][one_match_mask] = z_anode_one_match + sign*(clusters_keep[one_match_mask]['t_max'] - tai_ns_one_match).astype('f8')*z_drift_factor
+        clusters_keep['t0'][one_match_mask] = tai_ns_one_match
+        
     with h5py.File(output_filename, 'a') as output_file:
         output_file.create_dataset('clusters', data=clusters_keep)
         
