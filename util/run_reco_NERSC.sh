@@ -27,7 +27,7 @@ fi
 PKT_FILENAME=self_trigger_tpc12_run2_tile3-packet-2022_12_03_13_52_CET
 #PKT_FILENAME=datalog_2021_04_04_10_38_37_CEST
 INFILENAME=${data_folder}/${PKT_FILENAME}.h5
-OUTFILENAME=${OUTDIR}/${PKT_FILENAME}_clusters_test.h5
+OUTFILENAME=${OUTDIR}/${PKT_FILENAME}_clusters.h5
 PEDESTAL_FILE=${PEDESTAL_FOLDER}/pedestal_run2_tpc12_prc_4096_HV_off-binary-2022_12_02_23_34_CET_packets.h5
 
 shifter --image=mjkramer/sim2x2:genie_edep.3_04_00.20230620 --module=None -- /bin/bash << EOF
@@ -42,7 +42,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 cd charge_reco
-python3 charge_clustering.py ${DET} ${INFILENAME} ${OUTFILENAME} --save_hits=False --match_to_ext_trig=False
+python3 charge_clustering.py ${DET} ${INFILENAME} ${OUTFILENAME} --save_hits=True --match_to_ext_trig=False
 
 EOF
 #--pedestal_file=${PEDESTAL_FILE} --vcm_dac=71 --vref_dac=217
