@@ -53,7 +53,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     f_adc2 = h5py.File(input_light_files[1], 'r')
     
     # get timestamps for matching
-    if module.detector == 'module-0':
+    if module.detector == 'module0_run1' or module.detector == 'module0_run2':
         clock_correction_factor = 0.625
         tai_ns_adc1 = np.array(f_adc1['time']['tai_ns']*clock_correction_factor + f_adc1['time']['tai_s']*1e9)
         tai_ns_adc2 = np.array(f_adc2['time']['tai_ns']*clock_correction_factor + f_adc2['time']['tai_s']*1e9)
@@ -76,8 +76,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     samples = module.samples
     nchannels = module.nchannels
     light_events_dtype = np.dtype([('id', '<i4'), ('tai_ns', '<i8'), \
-                                   ('unix', '<i8'), ('channels_adc1', 'u1', (nchannels,)), \
-                                   ('channels_adc2', 'u1', (nchannels,)), \
+                                   ('unix', '<i8'),\
                                     ('voltage_adc1', 'i4', (nchannels, samples)), ('voltage_adc2', 'i4', (nchannels, samples))])
     light_events_all = np.zeros((0,), dtype=light_events_dtype)
     
@@ -111,7 +110,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
             nMatches_Total += 1
             
             light_event = np.zeros((1,), dtype=light_events_dtype)
-            if module.detector == 'module-0':
+            if module.detector == 'module0_run1' or module.detector == 'module0_run2':
                 light_tai_ns = (float(tai_ns_adc1[i]) + float(f_adc2['time'][light_match_mask]['tai_ns'][0] + f_adc2['time'][light_match_mask]['tai_s'][0]*1e9 ) * clock_correction_factor)/2 
             else:
                 light_tai_ns = (float(tai_ns_adc1[i]) + float(f_adc2['time'][light_match_mask]['tai_ns'][0]))/2 
@@ -164,8 +163,8 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
 
                     # save light event data to array
                     light_event['id'] = light_trig_index
-                    light_event['channels_adc1'] = channels_adc1
-                    light_event['channels_adc2'] = channels_adc2
+                    #light_event['channels_adc1'] = channels_adc1
+                    #light_event['channels_adc2'] = channels_adc2
                     light_event['voltage_adc1'] = voltage_adc1
                     light_event['voltage_adc2'] = voltage_adc2
                     light_event['tai_ns'] = light_tai_ns

@@ -6,8 +6,8 @@ class ModuleConfig:
     def __init__(self, module_name):
         self.module_name = module_name
 
-        if self.module_name == 'module-0':
-            self.detector = 'module-0'
+        if self.module_name == 'module0_run1':
+            self.detector = 'module0_run1'
             self.data_type = 'data'
             self.detector_dict_path = 'charge_layout/module0_multi_tile_layout-2.3.16.yaml'
             self.light_det_geom_path = 'light_layout/light_module_desc-0.0.0.yaml'
@@ -21,7 +21,7 @@ class ModuleConfig:
             self.PACMAN_clock_correction2 = [-9.329, 9.0283e-07]
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
-            self.match_charge_to_ext_trig = True
+            self.match_charge_to_ext_trig = False
             self.nBatches = 400
             self.batches_limit = 400
             self.ext_trig_matching_tolerance_unix = 1
@@ -32,9 +32,34 @@ class ModuleConfig:
             self.ext_trig_PPS_window = 1000
             self.samples = 256
             self.nchannels = 58
-
+        elif self.module_name == 'module0_run2':
+            self.detector = 'module0_run2'
+            self.data_type = 'data'
+            self.detector_dict_path = 'charge_layout/module0_multi_tile_layout-2.3.16.yaml'
+            self.light_det_geom_path = 'light_layout/light_module_desc-0.0.0.yaml'
+            self.detprop_path = 'detector_properties/module0.yaml'
+            self.use_disabled_channels_list = False
+            self.disabled_channels_list = 'disabled_channels/module0_disabled_channels_noise_cut.npz'
+            self.pedestal_file = 'pedestal/datalog_2021_04_06_20_11_48_CESTevd_ped.json'
+            self.config_file = 'config/module0_evd_config_21-03-31_12-36-13.json'
+            self.use_ped_config_files = True
+            self.PACMAN_clock_correction1 = [-9.597, 3.7453e-06]
+            self.PACMAN_clock_correction2 = [-9.329, 9.0283e-07]
+            self.PACMAN_clock_correction = True
+            self.timestamp_cut = True
+            self.match_charge_to_ext_trig = False
+            self.nBatches = 400
+            self.batches_limit = 400
+            self.ext_trig_matching_tolerance_unix = 1
+            self.ext_trig_matching_tolerance_PPS = 2e3 # ns
+            self.charge_light_matching_lower_PPS_window = 150000
+            self.charge_light_matching_upper_PPS_window = full_drift_time + 150000
+            self.charge_light_matching_unix_window = 0
+            self.ext_trig_PPS_window = 1000
+            self.samples = 1024
+            self.nchannels = 58
         elif self.module_name == 'module-0_MC':
-            self.detector = 'module-0'
+            self.detector = 'module0'
             self.data_type = 'MC'
             self.detector_dict_path = 'charge_layout/module0_multi_tile_layout-2.3.16.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
@@ -58,8 +83,8 @@ class ModuleConfig:
             self.ext_trig_PPS_window = 1000
 
         # You can add more elif conditions for different module names and their configurations
-        elif self.module_name == 'module-1':
-            self.detector = 'module-1'
+        elif self.module_name == 'module1':
+            self.detector = 'module1'
             self.data_type = 'data'
             self.detector_dict_path = 'charge_layout/module1_multi_tile_layout-2.3.16.yaml'
             self.light_det_geom_path = 'light_layout/light_module_desc-0.1.0.yaml'
@@ -85,8 +110,8 @@ class ModuleConfig:
             self.samples = 1000
             self.nchannels = 48
             
-        elif self.module_name == 'module-2':
-            self.detector = 'module-2'
+        elif self.module_name == 'module2':
+            self.detector = 'module2'
             self.data_type = 'data'
             self.detector_dict_path = 'charge_layout/module_2_multi_tile_layout-2022_11_18_04_35_CET.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'
@@ -112,8 +137,8 @@ class ModuleConfig:
             self.samples = 1024
             self.nchannels = 48
             
-        elif self.module_name == 'module-X':
-            self.detector = 'module-X'
+        elif self.module_name == 'moduleX':
+            self.detector = 'moduleX'
             self.data_type = 'data'
             self.detector_dict_path = 'charge_layout/moduleX_multi_tile_layout.yaml'
             self.detprop_path = 'detector_properties/module0.yaml'

@@ -167,7 +167,7 @@ def apply_data_cuts(input_config_name, *input_filepath):
 
         # plot index to list of (adc, channel) combos that correspond to a full PD tile
         # these dictionaries can be made by referring to the light detector geometry yaml
-        if input_config_name == 'module-0':
+        if input_config_name == 'module0_run1' or input_config_name == 'module0_run2':
             # plot index to list of (adc, channel) combos that correspond to a full PD tile
             io0_left_y_plot_dict = {0: [(0, 30),(0, 29),(0, 28),(0, 27),(0, 26),(0, 25)], \
                                    1: [(0, 23),(0, 22),(0, 21),(0, 20),(0, 19),(0, 18)], \
@@ -188,10 +188,6 @@ def apply_data_cuts(input_config_name, *input_filepath):
                                    1: [(0, 55),(0, 54),(0, 53),(0, 52),(0, 51),(0, 50)], \
                                    2: [(0, 46),(0, 45),(0, 44),(0, 43),(0, 42),(0, 41)], \
                                    3: [(0, 39),(0, 38),(0, 37),(0, 36),(0, 35),(0, 34)]}
-            rows_to_use = [0,2]
-            row_column_to_remove = [(2,0), (0,3)]
-            pedestal_range = (0, 80)
-            channel_range = (1, 63)
         else:
             # plot index to list of (adc, channel) combos that correspond to a full PD tile
             io0_left_y_plot_dict = {0: [(1, 15),(1, 14),(1, 13),(1, 12),(1, 11),(1, 10)], \
@@ -213,13 +209,34 @@ def apply_data_cuts(input_config_name, *input_filepath):
                                    1: [(0, 47),(0, 46),(0, 45),(0, 44),(0, 43),(0, 42)], \
                                    2: [(1, 41),(1, 40),(1, 39),(1, 38),(1, 37),(1, 36)], \
                                    3: [(0, 41),(0, 40),(0, 39),(0, 38),(0, 37),(0, 36)]}
+        
+        if input_config_name == 'module0_run1':
+            rows_to_use = [0,2]
+            row_column_to_remove = [] #[(2,0), (0,3)]
+            pedestal_range = (0, 80)
+            channel_range = (1, 63)
+        elif input_config_name == 'module0_run2':
+            rows_to_use = [0,1,2,3]
+            row_column_to_remove = []
+            pedestal_range = (0, 200)
+            channel_range = (1, 63)
+        elif input_config_name == 'module1':
             rows_to_use = [0,1,2,3]
             row_column_to_remove = []
             pedestal_range = (0, 200)
             channel_range = (4, 64)
-        
-        if input_config_name == 'module-1':
-            rows_to_use = [0,2]
+        elif input_config_name == 'module2':
+            rows_to_use = [0,1,2,3]
+            row_column_to_remove = []
+            pedestal_range = (0, 200)
+            channel_range = (4, 64)
+        elif input_config_name == 'module3':
+            rows_to_use = [0,1,2,3]
+            row_column_to_remove = []
+            pedestal_range = (0, 200)
+            channel_range = (4, 64)
+        else:
+            raise ValueError(f'Input config {input_config_name} not recognized.')
         # make dictionaries of (adc_num, channel_num) keys with positions
         io0_dict_left = {}
         io0_dict_right = {}
@@ -240,13 +257,13 @@ def apply_data_cuts(input_config_name, *input_filepath):
 
         # parameters for cuts
         use_old_method = True
-        d_LCM = 75 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
-        d_ACL = 75
-        hit_threshold_LCM = 4000
-        hit_threshold_ACL = 4000
+        d_LCM = 50 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
+        d_ACL = 50
+        hit_threshold_LCM = 2500
+        hit_threshold_ACL = 1e9
         hit_upper_bound = 1e9
         rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
-        opt_cut_shape = 'ellipse' # proximity cut type. Options: 'ellipse', 'circle', 'rect'.
+        opt_cut_shape = 'rect' # proximity cut type. Options: 'ellipse', 'circle', 'rect'.
         ellipse_b = 150 # ellipse semi-minor axis in mm
         clusters = np.array(f_in['clusters'])
 
@@ -371,8 +388,6 @@ def apply_data_cuts(input_config_name, *input_filepath):
         clustersSaved = False
         
         if use_light_proximity_cut:
-            # Note that the way this is designed now, it is a bit memory intensive (3-7GB), so 
-            # make sure this is run somewhere with ample memory.
             print(f'Applying optical proximity cut with {hit_threshold_LCM} ADC hit-threshold for LCM, {hit_threshold_ACL} ADC hit-threshold for ACL ...')
             #light_events = f_in['light_events']
             #wvfms_adc1 = f_in['light_events']['voltage_adc1']
