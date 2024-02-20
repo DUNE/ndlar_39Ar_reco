@@ -81,7 +81,7 @@ def sum_waveforms(light_event, batch_start, plot_to_adc_channel_dict, adc_channe
     positions = []
     wvfms_det = [] # all individual SiPM wvfms
     adc_channels = []
-    #print(f'light_id-batch_start={light_id-batch_start}, light_id={light_id}, batch_start={batch_start}')
+    
     for j, adc_ch in enumerate(plot_to_adc_channel_dict):
             position += np.array(adc_channel_to_position[adc_ch])
             positions.append(np.array(adc_channel_to_position[adc_ch]))
@@ -92,13 +92,11 @@ def sum_waveforms(light_event, batch_start, plot_to_adc_channel_dict, adc_channe
             else:
                 dtype_names = ['voltage_adc2', 'channels_adc2']
             if j==0:
-                #wvfm_sum = np.array(f_in['light_events'][light_id][dtype_names[0]])[f_in['light_events'][light_id][dtype_names[1]] == adc_ch[1]]
                 wvfm_sum = np.array(light_event[dtype_names[0]])[light_event[dtype_names[1]] == adc_ch[1]]
                 wvfms_det.append(wvfm_sum)
                 if np.size(wvfm_sum) > 0:
                     wvfm_sum -= np.mean(wvfm_sum[0][pedestal_range[0]:pedestal_range[1]]).astype('int16')
             else:
-                #wvfm = np.array(f_in['light_events'][light_id][dtype_names[0]])[f_in['light_events'][light_id][dtype_names[1]] == adc_ch[1]]
                 wvfm = np.array(light_event[dtype_names[0]])[light_event[dtype_names[1]] == adc_ch[1]]
                 wvfms_det.append(wvfm)
                 if np.size(wvfm) > 0:
@@ -182,7 +180,7 @@ def apply_data_cuts(input_config_name, *input_filepath):
             io1_left_y_plot_dict = {0: [(1, 30),(1, 29),(1, 28),(1, 27),(1, 26),(1, 25)], \
                                    1: [(1, 23),(1, 22),(1, 21),(1, 20),(1, 19),(1, 18)], \
                                    2: [(1, 14),(1, 13),(1, 12),(1, 11),(1, 10),(1, 9)], \
-                                   3: [(1, 7),(1, 6),(1, 5),(1, 4),(0, 3),(1, 2)]}
+                                   3: [(1, 7),(1, 6),(1, 5),(1, 4),(1, 3),(1, 2)]}
 
             io1_right_y_plot_dict = {0: [(0, 62),(0, 61),(0, 60),(0, 59),(0, 58),(0, 57)], \
                                    1: [(0, 55),(0, 54),(0, 53),(0, 52),(0, 51),(0, 50)], \
@@ -259,8 +257,8 @@ def apply_data_cuts(input_config_name, *input_filepath):
         use_old_method = True
         d_LCM = 50 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
         d_ACL = 50
-        hit_threshold_LCM = 2500
-        hit_threshold_ACL = 1e9
+        hit_threshold_LCM = 4000
+        hit_threshold_ACL = 4000
         hit_upper_bound = 1e9
         rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
         opt_cut_shape = 'rect' # proximity cut type. Options: 'ellipse', 'circle', 'rect'.
@@ -348,7 +346,7 @@ def apply_data_cuts(input_config_name, *input_filepath):
                 total_clusters = len(clusters)
                 print(f'len(cluster_indices_rate_cut) = {len(cluster_indices_rate_cut)}')
                 clusters = clusters[np.isin(clusters['id'], cluster_indices_rate_cut)]
-                print('Percentage of clusters removed: ', len(clusters) / total_clusters * 100)
+                print('Percentage of clusters removed: ', 1 - (len(clusters) / total_clusters * 100))
                 clusters_all=0
                 hits=0
         print(' ')
