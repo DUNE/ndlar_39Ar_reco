@@ -38,6 +38,9 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
     packets_keep_mask = np.zeros(len(packets), dtype=bool)
     len_keys = len(list(pixel_xy.keys())[0])
     total_keyerrors = 0
+    if len_keys == 4:
+        io_channels_all = np.array([[1+i*4,2+i*4,3+i*4,4+i*4] for i in range(0, 8)])
+    
     for i in range(len(packets['io_channel'])):
         if packets[i]['io_group'] % 2 == 1:
             io_group = 1
@@ -46,6 +49,7 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
         io_channel = packets[i]['io_channel']
         chip_id = packets[i]['chip_id']
         channel_id = packets[i]['channel_id']
+        #print(f'{io_group}, {io_channel}, {chip_id}, {channel_id}')
         unique_id = ((io_group * 256 + io_channel) * 256 + chip_id)*64 + channel_id
         if len_keys == 4:
             dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
@@ -74,8 +78,35 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
                                v_cm_sim, v_pedestal_sim))
         else:
             #print(f'KeyError {(io_group, io_channel, chip_id, channel_id)}')
-            total_keyerrors += 1
-    #print(f'Fraction of keyerrors = {total_keyerrors/len(packets)}')
+            io_channel_indices = np.where(io_channels_all == io_channel)
+            io_channels_tile = io_channels_all[io_channel_indices[0], :]
+            other_io_channels = io_channels_tile[io_channels_tile != io_channel]
+            for other_io in other_io_channels:
+                dict_values = pixel_xy.get((io_group, other_io, chip_id, channel_id))
+                if dict_values is not None:
+                    if disabled_channel_IDs is not None and np.any(np.isin(disabled_channel_IDs, int(unique_id))):
+                        pass # pass if packet is from channel that is in the disabled channels list
+                    else:
+                        xyz_values.append([dict_values[0], dict_values[1], dict_values[2], dict_values[3]])
+                        ts_inmm.append(v_drift*1e1*ts[i]*0.1)
+                        packets_keep_mask[i] = True
+                        unique_ids.append(unique_id)
+                        if mc_assn is None:
+                            if v_dac is not None:
+                                vref_mv = v_dac[1]
+                                vcm_mv = v_dac[0]
+                            else:
+                                vref_mv = config_dict[unique_id]['vref_mv']
+                                vcm_mv = config_dict[unique_id]['vcm_mv']
+                            charge.append(adcs_to_mV(packets[i]['dataword'], vref_mv,\
+                                       vcm_mv, pedestal_dict[unique_id]['pedestal_mv']))
+                        else:
+                            charge.append(adcs_to_mV(packets[i]['dataword'], v_ref_sim,\
+                                       v_cm_sim, v_pedestal_sim))
+                    break
+            if dict_values is None:
+                total_keyerrors += 1
+    print(f'Fraction of keyerrors = {total_keyerrors/len(packets)}')
     xyz_values = np.array(xyz_values)
     ts_inmm = np.array(ts_inmm)
     charge = np.array(charge)
