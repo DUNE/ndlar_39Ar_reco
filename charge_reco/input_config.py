@@ -118,7 +118,7 @@ class ModuleConfig:
             self.light_det_geom_path = 'light_layout/light_module_desc-0.1.0.yaml'
             self.use_disabled_channels_list = False
             self.disabled_channels_list = None
-            self.pedestal_file = 'pedestal/module2_ped-evd-2022_11_18_04_35_CET.json'
+            self.pedestal_file = 'pedestal/pedestal_run2_tpc12_prc_4096-packet-2022_11_29_12_49_CETevd_ped.json'
             self.config_file = 'config/module2_config-evd-2022_11_18_04_35_CET.json'
             self.use_ped_config_files = True
             self.PACMAN_clock_correction1 = [0., 0.]
