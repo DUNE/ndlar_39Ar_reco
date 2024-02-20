@@ -57,7 +57,7 @@ def run_reconstruction(input_config_name, input_filepath, output_filepath, save_
     if vcm_dac is None or vref_dac is None:
         v_dac = None
     else:
-        v_dac = (loading.dac2mV(vcm_dac, consts.vdda), loading.dac2mV(vref_dac, consts.vdda))
+        v_dac = (loading.dac2mv(vcm_dac, consts.vdda), loading.dac2mv(vref_dac, consts.vdda))
     detprop = loading.load_detector_properties(module)
     disabled_channel_IDs = loading.load_disabled_channels_list(module)
     
