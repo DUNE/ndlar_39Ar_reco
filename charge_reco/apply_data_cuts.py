@@ -75,7 +75,7 @@ def get_detector_position(adc: int, channel: int, geometry_data: Dict) -> Union[
     
     return [x, y, z]
 
-def sum_waveforms(light_event, batch_start, plot_to_adc_channel_dict, adc_channel_to_position, light_id, pedestal_range):
+def sum_waveforms(light_event, batch_start, plot_to_adc_channel_dict, adc_channel_to_position, light_id, pedestal_range, header):
     # Sum the waveforms in a particular tile in a particular event
     position = np.array([0.0, 0.0, 0.0])
     positions = []
@@ -92,12 +92,12 @@ def sum_waveforms(light_event, batch_start, plot_to_adc_channel_dict, adc_channe
             else:
                 dtype_names = ['voltage_adc2', 'channels_adc2']
             if j==0:
-                wvfm_sum = np.array(light_event[dtype_names[0]])[light_event[dtype_names[1]] == adc_ch[1]]
+                wvfm_sum = np.array(light_event[dtype_names[0]])[header[dtype_names[1]][0] == adc_ch[1]]
                 wvfms_det.append(wvfm_sum)
                 if np.size(wvfm_sum) > 0:
                     wvfm_sum -= np.mean(wvfm_sum[0][pedestal_range[0]:pedestal_range[1]]).astype('int16')
             else:
-                wvfm = np.array(light_event[dtype_names[0]])[light_event[dtype_names[1]] == adc_ch[1]]
+                wvfm = np.array(light_event[dtype_names[0]])[header[dtype_names[1]][0] == adc_ch[1]]
                 wvfms_det.append(wvfm)
                 if np.size(wvfm) > 0:
                     wvfm_sum = wvfm_sum + wvfm[0] - np.mean(wvfm[0][pedestal_range[0]:pedestal_range[1]]).astype('int16')
@@ -126,6 +126,11 @@ def apply_data_cuts(input_config_name, *input_filepath):
     
     input_filepaths = sys.argv[2:]
     output_filepaths = []
+    
+    rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
+    hit_threshold_LCM = 4000
+    hit_threshold_ACL = 4000
+    
     for input_filepath in input_filepaths:
         start_time = time.time()
         # check that the input file exists
@@ -145,6 +150,10 @@ def apply_data_cuts(input_config_name, *input_filepath):
             f_in['light_events']
         except:
             raise Exception("'light_events' dataset not found in input file.")
+        try:
+            f_in['header']
+        except:
+            raise Exception("'header' dataset not found in input file.")
         N_files = len(list(input_filepaths))
         data_directory = os.path.dirname(input_filepath)
         output_filepath = input_filepath.split('.')[0] + '_with-cuts' + '.h5'
@@ -257,14 +266,12 @@ def apply_data_cuts(input_config_name, *input_filepath):
         use_old_method = True
         d_LCM = 50 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
         d_ACL = 50
-        hit_threshold_LCM = 4000
-        hit_threshold_ACL = 4000
         hit_upper_bound = 1e9
-        rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
         opt_cut_shape = 'rect' # proximity cut type. Options: 'ellipse', 'circle', 'rect'.
         ellipse_b = 150 # ellipse semi-minor axis in mm
         clusters = np.array(f_in['clusters'])
-
+        header = f_in['header']
+        
         # Remove single hit clusters that come from noisy channels
         if use_disabled_channels_cut:
             print(f'Applying disabled channels cut with {rate_threshold} Hz threshold ...')
@@ -346,7 +353,7 @@ def apply_data_cuts(input_config_name, *input_filepath):
                 total_clusters = len(clusters)
                 print(f'len(cluster_indices_rate_cut) = {len(cluster_indices_rate_cut)}')
                 clusters = clusters[np.isin(clusters['id'], cluster_indices_rate_cut)]
-                print('Percentage of clusters removed: ', 1 - (len(clusters) / total_clusters * 100))
+                print('Percentage of clusters removed: ', (1 - (len(clusters) / total_clusters))*100)
                 clusters_all=0
                 hits=0
         print(' ')
@@ -459,7 +466,7 @@ def apply_data_cuts(input_config_name, *input_filepath):
                                 # this is a summed waveform for one PD tile (sum of 6 SiPMs)
                                 wvfm_sum, tile_position, wvfms_det, positions, adc_channels = \
                                         sum_waveforms(light_event, batch_start, plot_to_adc_channel, \
-                                        adc_channel_to_position[i], light_batch_index, pedestal_range)
+                                        adc_channel_to_position[i], light_batch_index, pedestal_range, header)
                                 if np.size(wvfm_sum) > 0:
                                     wvfm_max = np.max(wvfm_sum)
                                 else:
@@ -557,7 +564,7 @@ def apply_data_cuts(input_config_name, *input_filepath):
                             light_hits_summed = np.zeros((0,), dtype=light_hits_summed_dtype)
                             batch_index = 0
                             firstBatch = False
-                    elif not firstBatch and batch_index == batch_size:
+                    elif not firstBatch and batch_index == batch_size and light_hits_summed.shape[0] > 0:
                         with h5py.File(output_filepath, 'a') as f_out:
                             f_out['light_hits_summed'].resize((f_out['light_hits_summed'].shape[0] + light_hits_summed.shape[0]), axis=0)
                             f_out['light_hits_summed'][-light_hits_summed.shape[0]:] = light_hits_summed
@@ -629,9 +636,43 @@ def apply_data_cuts(input_config_name, *input_filepath):
         # Concatenate all the clusters data
         combined_clusters_data = np.concatenate(clusters_data, axis=0)
         combined_clusters_data_with_timestamps = add_dtype_to_array(combined_clusters_data, 'file_timestamp', 'S24', timestamps)
+        
+        f_in = h5py.File(input_filepaths[0], 'r')
+        header = f_in['header']
+        
         # Create a new HDF5 file to store the combined data
         with h5py.File(data_directory + '/' + combined_output_filepath, 'w') as f_out:
             f_out.create_dataset('clusters', data=combined_clusters_data_with_timestamps)
+            
+            channels_adc1 = header['channels_adc1'][0]
+            channels_adc2 = header['channels_adc2'][0]
+            max_hits = header['max_hits'][0]
+            max_clusters = header['max_clusters'][0]
+            # Define the dtype for your structured array
+            header_dtype = np.dtype([
+                ('channels_adc1', channels_adc1.dtype, channels_adc1.shape),
+                ('channels_adc2', channels_adc1.dtype, channels_adc1.shape),
+                ('max_hits', int),
+                ('max_clusters', int),
+                ('rate_threshold', float),
+                ('hit_threshold_LCM', int),
+                ('hit_threshold_ACL', int)
+            ])
+
+            # Create the structured array
+            header_data = np.empty(1, dtype=header_dtype)
+            header_data['channels_adc1'] = channels_adc1
+            header_data['channels_adc2'] = channels_adc2
+            header_data['max_hits'] = max_hits
+            header_data['max_clusters'] = max_clusters
+            if use_disabled_channels_cut:
+                header_data['rate_threshold'] = rate_threshold
+            if use_light_proximity_cut:
+                header_data['hit_threshold_LCM'] = hit_threshold_LCM
+                header_data['hit_threshold_ACL'] = hit_threshold_ACL
+
+            f_out.create_dataset('header', data=header_data)
+            
             for i in range(len(light_hits_summed_data)):
                 if i == 0:
                     f_out.create_dataset('light_hits_summed', data=light_hits_summed_data[i], maxshape=(None,))
@@ -641,6 +682,7 @@ def apply_data_cuts(input_config_name, *input_filepath):
                     f_out['light_hits_summed'][-light_hits_summed_data[i].shape[0]:] = light_hits_summed_data[i]
                     f_out['light_hits_SiPM'].resize((f_out['light_hits_SiPM'].shape[0] + light_hits_SiPM_data[i].shape[0]), axis=0)
                     f_out['light_hits_SiPM'][-light_hits_SiPM_data[i].shape[0]:] = light_hits_SiPM_data[i]
+        f_in.close()
         with h5py.File(data_directory + '/' + combined_output_filepath_justClusters, 'w') as f_out:
             f_out.create_dataset('clusters', data=combined_clusters_data_with_timestamps)
         
