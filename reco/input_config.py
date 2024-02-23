@@ -32,6 +32,8 @@ class ModuleConfig:
             self.ext_trig_PPS_window = 1000
             self.samples = 256
             self.nchannels = 58
+            self.hit_threshold_LCM = 1500
+            self.hit_threshold_ACL = 1e9
         elif self.module_name == 'module0_run2':
             self.detector = 'module0_run2'
             self.data_type = 'data'
@@ -58,6 +60,8 @@ class ModuleConfig:
             self.ext_trig_PPS_window = 1000
             self.samples = 1024
             self.nchannels = 58
+            self.hit_threshold_LCM = 3000
+            self.hit_threshold_ACL = 3000
         elif self.module_name == 'module-0_MC':
             self.detector = 'module0'
             self.data_type = 'MC'
@@ -109,6 +113,8 @@ class ModuleConfig:
             self.ext_trig_PPS_window = 1000
             self.samples = 1000
             self.nchannels = 48
+            self.hit_threshold_LCM = 4000
+            self.hit_threshold_ACL = 4000
             
         elif self.module_name == 'module2':
             self.detector = 'module2'
@@ -136,6 +142,8 @@ class ModuleConfig:
             self.ext_trig_PPS_window = 1000
             self.samples = 1024
             self.nchannels = 48
+            self.hit_threshold_LCM = 4800
+            self.hit_threshold_ACL = 1500
             
         elif self.module_name == 'moduleX':
             self.detector = 'moduleX'
