@@ -38,8 +38,8 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
     clusters_indices_cut = disabled_channel_cut(f_charge, rate_threshold, max_hits)
     
-    hit_threshold_LCM = 4800
-    hit_threshold_ACL = 1500
+    hit_threshold_LCM = module.hit_threshold_LCM
+    hit_threshold_ACL = module.hit_threshold_ACL
     d_LCM = 300 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
     d_ACL = 300
     hit_upper_bound = 1e9
@@ -128,8 +128,8 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                     
                         # save header once to file
                         if saveHeader:
-                            channels_adc1 = events_file0['data'][0]['channel']
-                            channels_adc2 = events_file1['data'][0]['channel']
+                            channels_adc1 = events_file0['data'][evt_index]['channel']
+                            channels_adc2 = events_file1['data'][evt_index]['channel']
                             
                             # Define the dtype for your structured array
                             header_dtype = np.dtype([
@@ -268,9 +268,9 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                                     hit_summed['tile_y'] = tile_position[1]
                                                     hit_summed['tile_z'] = tile_position[2]
                                                     hit_summed['wvfm_max'] = wvfm_max
-                                                    hit_summed['rowID'] = i
-                                                    hit_summed['columnID'] = j
-                                                    if i in [0,2]:
+                                                    hit_summed['rowID'] = j
+                                                    hit_summed['columnID'] = i
+                                                    if j in [0,2]:
                                                         hit_summed['det_type'] = 'LCM'
                                                     else:
                                                         hit_summed['det_type'] = 'ACL'
