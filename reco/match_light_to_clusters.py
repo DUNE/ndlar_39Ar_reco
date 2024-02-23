@@ -12,6 +12,8 @@ from input_config import ModuleConfig
 import consts
 from adc64format import adc64format
 from collections import defaultdict
+from cuts_functions import *
+import loading
 
 def main(input_clusters_file, output_filename, *input_light_files, input_config_name):
     """
@@ -23,16 +25,47 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
           input_config_name (str): name of detector (e.g. module-1)
     """
     
+    # constants
+    max_hits = 10 # maximum hits per cluster
+    max_clusters = 5 # maximum clusters per event
+    
     module = ModuleConfig(input_config_name)
     if os.path.exists(output_filename):
         raise Exception('Output file '+ str(output_filename) + ' already exists.')
     # get clusters
     f_charge = h5py.File(input_clusters_file, 'r')
-    clusters = np.array(f_charge['clusters'])
     
+    rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
+    clusters_indices_cut = disabled_channel_cut(f_charge, rate_threshold, max_hits)
+    
+    hit_threshold_LCM = 4800
+    hit_threshold_ACL = 1500
+    d_LCM = 300 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
+    d_ACL = 300
+    hit_upper_bound = 1e9
+    opt_cut_shape = 'rect' # proximity cut type. Options: 'ellipse', 'circle', 'rect'.
+    ellipse_b = 150 # ellipse semi-minor axis in mm
+    light_geometry_path = module.light_det_geom_path
+    light_geometry = loading.load_light_geometry(light_geometry_path)
+    io0_left_y_plot_dict, io0_right_y_plot_dict, io1_left_y_plot_dict, io1_right_y_plot_dict = get_io_channel_map(input_config_name)
+    rows_to_use, row_column_to_remove, pedestal_range, channel_range = get_cut_config(input_config_name)
+    io0_dict_left, io0_dict_right, io1_dict_left, io1_dict_right = get_adc_channel_map(channel_range, light_geometry)
+    plot_to_adc_channel_dict = [io0_left_y_plot_dict, io0_right_y_plot_dict, \
+                                    io1_left_y_plot_dict, io1_right_y_plot_dict]
+    adc_channel_to_position = [io0_dict_left, io0_dict_right, io1_dict_left, io1_dict_right]
+
+    nsamples = module.samples
+    nchannels = module.nchannels
+    light_hits_summed_dtype = np.dtype([('light_trig_index', '<i4'), ('tai_ns', '<i8'), \
+        ('unix', '<i8'), ('samples', 'i4', (nsamples)), ('io_group', '<i4'), ('tile_x', '<f8'), ('tile_y', '<f8'), ('tile_z', '<f8'), \
+        ('rowID', '<i4'), ('columnID', '<i4'), ('det_type', 'S3'), ('wvfm_max', '<i4')])
+    light_hits_summed = np.zeros((0,), dtype=light_hits_summed_dtype)
+    light_wvfms_dtype = np.dtype([('voltage_adc1', 'i4', (nchannels, nsamples)), ('voltage_adc2', 'i4', (nchannels, nsamples))])
+    
+    clusters = np.array(f_charge['clusters'])
     sorted_indices = np.argsort(clusters['unix'])
     clusters[:] = clusters[sorted_indices]
-    
+
     # find start and stop indices for each occurrance of a unix second value
     unique_unix, start_indices = np.unique(clusters['unix'], return_index=True)
     end_indices = np.roll(start_indices, shift=-1)
@@ -44,38 +77,23 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     
     # create new clusters array from old dataset
     indices_array_size = 5
-    clusters_dtype = clusters.dtype
-    new_dtype = np.dtype(clusters_dtype.descr + [('light_trig_index', '<i4', (indices_array_size,))])
     default_light_trig_indices = np.full(indices_array_size, -1, dtype='<i4')
-    clusters_new = np.empty(clusters.shape, dtype=new_dtype)
-    for field in clusters_dtype.names:
-        clusters_new[field] = clusters[field]
-    clusters_new['light_trig_index'] = default_light_trig_indices
-
+    clusters = add_dtype_to_array(clusters, 'light_trig_index', '<i4', default_light_trig_indices, size=(indices_array_size,))
+    
     samples = module.samples
     nchannels = module.nchannels
-    light_events_dtype = np.dtype([('id', '<i4'), ('tai_ns', '<i8'), \
-                                   ('unix', '<i8'),\
-                                    ('voltage_adc1', 'i4', (nchannels, samples)), ('voltage_adc2', 'i4', (nchannels, samples))])
-    light_events_all = np.zeros((0,), dtype=light_events_dtype)
-    
-    batch_size = 25
-    first_batch = True
-    
+        
     lower_PPS_window = module.charge_light_matching_lower_PPS_window
     upper_PPS_window = module.charge_light_matching_upper_PPS_window
     light_trig_index = 0
     
-    # for selection
-    max_hits = 10 # maximum hits per cluster
-    max_clusters = 5 # maximum clusters per event
     clusters_keep = 0
     
     nMatches_Total = 0
     nMatches_Selection = 0
     clock_correction_factor = 0.625
     z_drift_factor = 10*consts.v_drift/1e3
-
+    
     # peak in one file to get number of events for progress bar
     total_events = 0
     with adc64format.ADC64Reader(input_light_files[0]) as reader:
@@ -86,10 +104,13 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
         #print(f'file contains {size // chunk_size} events')
         
     batch_size = 25 # how many events to load on each iteration
+    batch_size_save = 25
+    firstBatch = True
+    batch_index = 0
     saveHeader = True
     nBatches = 0
     with adc64format.ADC64Reader(input_light_files[0], input_light_files[1]) as reader:
-        with tqdm.tqdm(total=int((size//chunk_size)/batch_size), unit=' chunks', smoothing=0) as pbar:
+        with tqdm(total=int((size//chunk_size)/batch_size), unit=' chunks', smoothing=0) as pbar:
             while True:
                 events = reader.next(batch_size)
                 nBatches += 1
@@ -115,7 +136,10 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                 ('channels_adc1', channels_adc1.dtype, channels_adc1.shape),
                                 ('channels_adc2', channels_adc1.dtype, channels_adc1.shape),
                                 ('max_hits', int),
-                                ('max_clusters', int)
+                                ('max_clusters', int),
+                                ('rate_threshold', float),
+                                ('hit_threshold_LCM', int),
+                                ('hit_threshold_ACL', int)
                             ])
 
                             # Create the structured array
@@ -124,6 +148,9 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                             header_data['channels_adc2'] = channels_adc2
                             header_data['max_hits'] = max_hits
                             header_data['max_clusters'] = max_clusters
+                            header_data['rate_threshold'] = rate_threshold
+                            header_data['hit_threshold_LCM'] = hit_threshold_LCM
+                            header_data['hit_threshold_ACL'] = hit_threshold_ACL
 
                             with h5py.File(output_filename, 'a') as output_file:
                                 output_file.create_dataset('header', data=header_data)
@@ -132,6 +159,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                         tai_ns_adc1 = events_file0['time'][evt_index][0]['tai_ns']
                         tai_ns_adc2 = events_file1['time'][evt_index][0]['tai_ns']
 
+                        # correct timestamps
                         if module.detector == 'module0_run1' or module.detector == 'module0_run2':
                             clock_correction_factor = 0.625
                             tai_s_adc1 = events_file0['time'][evt_index][0]['tai_s']
@@ -146,10 +174,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                         unix_adc1 = int(events_file0['header'][evt_index][0]['unix']*1e-3)
                         unix_adc2 = int(events_file1['header'][evt_index][0]['unix']*1e-3)
                         
-                        # only match to ext triggers if there is an event in each ADC
                         nMatches_Total += 1
-
-                        light_event = np.zeros((1,), dtype=light_events_dtype)
 
                         light_tai_ns = (tai_ns_adc1+tai_ns_adc2)/2
                         light_unix_s = int(unix_adc1)
@@ -165,75 +190,136 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                         matched_clusters_mask = (clusters_chunk['t_min'] > light_tai_ns - lower_PPS_window) & \
                                                     (clusters_chunk['t_max'] < light_tai_ns + upper_PPS_window)
                         indices_of_clusters = np.where(matched_clusters_mask)[0]
-
-                        # keep only matched light events, and keep track of indices for associations
+                        
                         clusters_nhit = []
+                        
                         if len(indices_of_clusters) > 0:
-                            indices_of_clusters = np.array(indices_of_clusters) + start_index
-                            # log index of light trig in each cluster
                             for index in indices_of_clusters:
-                                # replace the -1's from the left
-                                for I in range(indices_array_size):
-                                    if clusters_new[index]['light_trig_index'][I] == -1:
-                                        clusters_new[index]['light_trig_index'][I] = light_trig_index
-                                        break
-                                clusters_nhit.append(clusters_new[index]['nhit'])
+                                clusters_nhit.append(clusters_chunk[index]['nhit'])
+                                
+                            # require limit on number of clusters per event
                             nClustersLimit = len(indices_of_clusters) <= max_clusters
+                            
                             # require limit on number of hits per cluster in match
                             nHitsLimit = np.all(np.array(clusters_nhit) <= max_hits)
 
-                            if light_trig_index == 0 and nClustersLimit and nHitsLimit:
-                                clusters_keep = clusters_new[indices_of_clusters]
-                            elif light_trig_index > 0 and nClustersLimit and nHitsLimit:
-                                clusters_keep = np.concatenate((clusters_keep, clusters_new[indices_of_clusters]))
                             if nClustersLimit and nHitsLimit:
-                                nMatches_Selection += 1
-                                # save light event data to array
-                                light_event['id'] = light_trig_index
-                                light_event['voltage_adc1'] = events_file0['data'][evt_index]['voltage']
-                                light_event['voltage_adc2'] = events_file1['data'][evt_index]['voltage']
-                                light_event['tai_ns'] = light_tai_ns
-                                light_event['unix'] = light_unix_s
-                                light_events_all = np.concatenate((light_events_all, light_event))
+                                
+                                clusters_new = clusters_chunk[indices_of_clusters]
+                                #clusters_new = clusters_new[np.isin(clusters_new['id'], clusters_indices_cut)]
+                                #indices_of_clusters = np.array(indices_of_clusters) + start_index
+                                # loop through columns of p.detector tiles
+                                for i in range(4):
+                                    # loop through rows of p.detector tiles
+                                    for j in range(4):
+                                        # optionally skip some rows, like for module-0 ACLs
+                                        if j in rows_to_use and (j,i) not in row_column_to_remove:
+                                            if j in [0,2]:
+                                                hit_threshold = hit_threshold_LCM
+                                                d = d_LCM
+                                            else:
+                                                hit_threshold = hit_threshold_ACL
+                                                d = d_ACL
+                                            plot_to_adc_channel = list(plot_to_adc_channel_dict[i].values())[j]
 
-                                light_trig_index += 1
-                                if first_batch:
-                                    #print('Saving first batch:')
-                                    first_batch = False
-                                    with h5py.File(output_filename, 'a') as output_file:
-                                        output_file.create_dataset('light_events', data=light_events_all, maxshape=(None,))
-                                    light_events_all = np.zeros((0,), dtype=light_events_dtype)
-                                else:
-                                    #print('Saving batch:')
-                                    with h5py.File(output_filename, 'a') as output_file:
-                                        output_file['light_events'].resize((output_file['light_events'].shape[0] + light_events_all.shape[0]), axis=0)
-                                        output_file['light_events'][-light_events_all.shape[0]:] = light_events_all
-                                    light_events_all = np.zeros((0,), dtype=light_events_dtype)
+                                            voltage_adc1 = np.array(events_file0['data'][evt_index]['voltage'])
+                                            voltage_adc2 = np.array(events_file1['data'][evt_index]['voltage'])
+                                            
+                                            # this is a summed waveform for one PD tile (sum of 6 SiPMs)
+                                            wvfm_sum, tile_position, wvfms_det, positions, adc_channels = \
+                                                    sum_waveforms(voltage_adc1, voltage_adc2, plot_to_adc_channel, \
+                                                    adc_channel_to_position[i], pedestal_range,\
+                                                    channels_adc1, channels_adc2)
+                                            
+                                            if np.size(wvfm_sum) > 0:
+                                                wvfm_max = np.max(wvfm_sum)
+                                            else:
+                                                wvfm_max = 0
+                                            
+                                            # only keep events with a summed waveform above the threshold
+                                            if wvfm_max > hit_threshold:
+                                                if tile_position[2] < 0:
+                                                    tpc_id = 1
+                                                else:
+                                                    tpc_id = 2
+                                                
+                                                tpc_mask = clusters_new['io_group'] == tpc_id
+                                                
+                                                clusters_new = clusters_new[tpc_mask]
+                                                #print(np.sum(clusters_new['io_group'] == 2))
+                                                if np.size(clusters_new) > 0:
+                                                    for index in range(len(clusters_new)):
+                                                        # replace the -1's from the left
+                                                        for I in range(indices_array_size):
+                                                            if clusters_new[index]['light_trig_index'][I] == -1:
+                                                                clusters_new[index]['light_trig_index'][I] = light_trig_index
+                                                                break
+                                                        clusters_new[index]['t0'] = light_tai_ns
+                                                
+                                                if np.size(clusters_new) > 0:          
+                                                    nMatches_Selection+=1
+                                                    hit_summed = np.zeros((1,), dtype=light_hits_summed_dtype)
+                                                    hit_summed['light_trig_index'] = light_trig_index
+                                                    hit_summed['tai_ns'] = light_tai_ns
+                                                    hit_summed['unix'] = light_unix_s
+                                                    hit_summed['samples'] = wvfm_sum
+                                                    hit_summed['io_group'] = tpc_id
+                                                    hit_summed['tile_x'] = tile_position[0]
+                                                    hit_summed['tile_y'] = tile_position[1]
+                                                    hit_summed['tile_z'] = tile_position[2]
+                                                    hit_summed['wvfm_max'] = wvfm_max
+                                                    hit_summed['rowID'] = i
+                                                    hit_summed['columnID'] = j
+                                                    if i in [0,2]:
+                                                        hit_summed['det_type'] = 'LCM'
+                                                    else:
+                                                        hit_summed['det_type'] = 'ACL'
+                                                    if light_trig_index == 0 or batch_index == 0:
+                                                        hits_summed_all = hit_summed
+                                                        clusters_keep = clusters_new
+                                                    else:
+                                                        hits_summed_all = np.concatenate((hits_summed_all, hit_summed))
+                                                        clusters_keep = np.concatenate((clusters_keep, clusters_new))
+                                                    if batch_index == batch_size_save:
+                                                        clusters_keep = clusters_keep[np.isin(clusters_keep['id'], clusters_indices_cut)]
+                                                        one_match_mask = (clusters_keep['light_trig_index'] != -1).sum(axis=1) == 1
+                                                        # calculate z_drift values and place in clusters array
+                                                        sign = np.zeros(np.sum(one_match_mask), dtype=int)
+                                                        z_anode = clusters_keep['z_anode'][one_match_mask]
+                                                        sign[z_anode < 0] = 1
+                                                        sign[z_anode > 0] = -1
+                                                        clusters_keep['z_drift_min'][one_match_mask] = \
+                                                                z_anode + \
+                                                                sign*(clusters_keep[one_match_mask]['t_min'] - \
+                                                                clusters_keep['t0'][one_match_mask]).astype('f8')*z_drift_factor
+                                                        clusters_keep['z_drift_mid'][one_match_mask] = \
+                                                                z_anode + \
+                                                                sign*(clusters_keep[one_match_mask]['t_mid'] - \
+                                                                clusters_keep['t0'][one_match_mask]).astype('f8')*z_drift_factor
+                                                        clusters_keep['z_drift_max'][one_match_mask] = \
+                                                                z_anode + \
+                                                                sign*(clusters_keep[one_match_mask]['t_max'] - \
+                                                                clusters_keep['t0'][one_match_mask]).astype('f8')*z_drift_factor
+                                                        
+                                                        if firstBatch:
+                                                            firstBatch = False
+                                                            with h5py.File(output_filename, 'a') as f_out:
+                                                                f_out.create_dataset('light_hits_summed', data=hits_summed_all, maxshape=(None,))
+                                                                f_out.create_dataset('clusters', data=clusters_keep, maxshape=(None,))
+                                                            batch_index = 0
+                                                        elif not firstBatch:
+                                                            with h5py.File(output_filename, 'a') as f_out: 
+                                                                f_out['light_hits_summed'].resize((f_out['light_hits_summed'].shape[0] + hits_summed_all.shape[0]), axis=0)
+                                                                f_out['light_hits_summed'][-hits_summed_all.shape[0]:] = hits_summed_all
+                                                                f_out['clusters'].resize((f_out['clusters'].shape[0] + clusters_keep.shape[0]), axis=0)
+                                                                f_out['clusters'][-clusters_keep.shape[0]:] = clusters_keep
+                                                            batch_index = 0
+                                                    else:
+                                                        batch_index+=1
+                                                    light_trig_index += 1
                 pbar.update()
                 if len(events_file0['header']) < batch_size:
                     break
-
-    with h5py.File(output_filename, 'a') as output_file:
-        tai_ns_all = np.array(output_file['light_events']['tai_ns'])
-        one_match_mask = (clusters_keep['light_trig_index'] != -1).sum(axis=1) == 1
-        
-        # for clusters with one light trig match, get array of associated light trig indices
-        cluster_light_trig_indices_one_match = np.array(clusters_keep[one_match_mask]['light_trig_index'][:,0])
-        z_anode_one_match = clusters_keep[one_match_mask]['z_anode']
-        tai_ns_one_match = tai_ns_all[cluster_light_trig_indices_one_match]
-        
-        # calculate z_drift values and place in clusters array
-        sign = np.zeros(len(z_anode_one_match), dtype=int)
-        sign[z_anode_one_match < 0] = 1
-        sign[z_anode_one_match > 0] = -1
-        clusters_keep['z_drift_min'][one_match_mask] = z_anode_one_match + sign*(clusters_keep[one_match_mask]['t_min'] - tai_ns_one_match).astype('f8')*z_drift_factor
-        clusters_keep['z_drift_mid'][one_match_mask] = z_anode_one_match + sign*(clusters_keep[one_match_mask]['t_mid'] - tai_ns_one_match).astype('f8')*z_drift_factor
-        clusters_keep['z_drift_max'][one_match_mask] = z_anode_one_match + sign*(clusters_keep[one_match_mask]['t_max'] - tai_ns_one_match).astype('f8')*z_drift_factor
-        clusters_keep['t0'][one_match_mask] = tai_ns_one_match
-        
-    with h5py.File(output_filename, 'a') as output_file:
-        output_file.create_dataset('clusters', data=clusters_keep)
-        
     print(f'Fraction of light events with matches to clusters = {nMatches_Total/total_events}')
     print(f'Fraction of light event matches left after selection = {nMatches_Selection/total_events}')
     print(f'Total events = {nMatches_Selection}')
