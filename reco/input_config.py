@@ -102,7 +102,7 @@ class ModuleConfig:
             self.PACMAN_clock_correction2 = [0., 0.]
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
-            self.match_charge_to_ext_trig = True
+            self.match_charge_to_ext_trig = False
             self.nBatches = 400
             self.batches_limit = 400
             self.ext_trig_matching_tolerance_unix = 1
@@ -131,7 +131,7 @@ class ModuleConfig:
             self.PACMAN_clock_correction2 = [0., 0.]
             self.PACMAN_clock_correction = True
             self.timestamp_cut = True
-            self.match_charge_to_ext_trig = True
+            self.match_charge_to_ext_trig = False
             self.nBatches = 400
             self.batches_limit = 400
             self.ext_trig_matching_tolerance_unix = 1
@@ -144,7 +144,34 @@ class ModuleConfig:
             self.nchannels = 48
             self.hit_threshold_LCM = 4800
             self.hit_threshold_ACL = 1500
-            
+        elif self.module_name == 'module3':
+            self.detector = 'module3'
+            self.data_type = 'data'
+            self.detector_dict_path = 'charge_layout/multi_tile_layout-module3.yaml'
+            self.detprop_path = 'detector_properties/module0.yaml'
+            self.light_det_geom_path = 'light_layout/light_module_desc-0.1.0.yaml'
+            self.use_disabled_channels_list = False
+            self.disabled_channels_list = None
+            self.pedestal_file = 'pedestal/pedestal_HV_on_tpc12-packet-2023_03_15_22_16_CETevd_ped.json'
+            self.config_file = 'config/module2_config-evd-2022_11_18_04_35_CET.json'
+            self.use_ped_config_files = True
+            self.PACMAN_clock_correction1 = [0., 0.]
+            self.PACMAN_clock_correction2 = [0., 0.]
+            self.PACMAN_clock_correction = True
+            self.timestamp_cut = True
+            self.match_charge_to_ext_trig = False
+            self.nBatches = 400
+            self.batches_limit = 400
+            self.ext_trig_matching_tolerance_unix = 1
+            self.ext_trig_matching_tolerance_PPS = 2.0e3 # ns
+            self.charge_light_matching_lower_PPS_window = 150000
+            self.charge_light_matching_upper_PPS_window = full_drift_time + 150000
+            self.charge_light_matching_unix_window = 0
+            self.ext_trig_PPS_window = 1000
+            self.samples = 1024
+            self.nchannels = 48
+            self.hit_threshold_LCM = 4500
+            self.hit_threshold_ACL = 1500
         elif self.module_name == 'moduleX':
             self.detector = 'moduleX'
             self.data_type = 'data'
