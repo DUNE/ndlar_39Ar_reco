@@ -2,25 +2,6 @@ import numpy as np
 from typing import List, Dict, Union
 from tqdm import tqdm
 
-def is_point_inside_ellipse(x, y, h, k, a, b):
-    """
-    Check if a point (x, y) is inside an ellipse centered at (h, k) with semi-axes a and b.
-    This is used to determine if a cluster is within an ellipse relative to the middle 
-    of a photon detector tile. 
-
-    Parameters:
-        x (float): x-coordinate of the point to check.
-        y (float): y-coordinate of the point to check.
-        h (float): x-coordinate of the ellipse's center.
-        k (float): y-coordinate of the ellipse's center.
-        a (float): Length of the semi-major axis of the ellipse.
-        b (float): Length of the semi-minor axis of the ellipse.
-
-    Returns:
-        bool: True if the point is inside the ellipse, False otherwise.
-    """
-    return ((x - h)**2 / a**2) + ((y - k)**2 / b**2) <= 1
-
 def get_detector_position(adc: int, channel: int, geometry_data: Dict) -> Union[List[float], str]:
     # Extract relevant data from the geometry data
     tpc_center = geometry_data['tpc_center']
