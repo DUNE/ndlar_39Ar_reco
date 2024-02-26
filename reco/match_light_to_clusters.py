@@ -308,11 +308,14 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                                                 f_out.create_dataset('clusters', data=clusters_keep, maxshape=(None,))
                                                             batch_index = 0
                                                         elif not firstBatch:
-                                                            with h5py.File(output_filename, 'a') as f_out: 
-                                                                f_out['light_hits_summed'].resize((f_out['light_hits_summed'].shape[0] + hits_summed_all.shape[0]), axis=0)
-                                                                f_out['light_hits_summed'][-hits_summed_all.shape[0]:] = hits_summed_all
-                                                                f_out['clusters'].resize((f_out['clusters'].shape[0] + clusters_keep.shape[0]), axis=0)
-                                                                f_out['clusters'][-clusters_keep.shape[0]:] = clusters_keep
+                                                            with h5py.File(output_filename, 'a') as f_out:
+                                                                if hits_summed_all.shape[0] > 0:
+                                                                    f_out['light_hits_summed'].resize((f_out['light_hits_summed'].shape[0] + hits_summed_all.shape[0]), axis=0)
+                                                                    f_out['light_hits_summed'][-hits_summed_all.shape[0]:] = hits_summed_all
+                                                                
+                                                                if clusters_keep.shape[0] > 0: 
+                                                                    f_out['clusters'].resize((f_out['clusters'].shape[0] + clusters_keep.shape[0]), axis=0)
+                                                                    f_out['clusters'][-clusters_keep.shape[0]:] = clusters_keep
                                                             batch_index = 0
                                                     else:
                                                         batch_index+=1
