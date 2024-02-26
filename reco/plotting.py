@@ -257,13 +257,11 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
     nbins = int(bins)
     bin_centers, bin_contents, bin_error = make_hist(data*eV_per_e, nbins, range_start*eV_per_e,range_end*eV_per_e)
     return bin_centers, bin_contents, bin_error
-def plotRecoSpectrum(clusters, nbins=100, data_type='data', color='b', linewidth=1, label=None, linestyle=None, norm=None,plot_errorbars=False, useYlog=False
-, calibrate=True, bin_start=0, axes=None, recomb_filename=None, DET=None, figTitle=None, saveFig=False, fileName=None)
+def plotRecoSpectrum(clusters, nbins=100, data_type='data', color='b', linewidth=1, label=None, linestyle=None, norm=None,plot_errorbars=False, useYlog=False,calibrate=True, bin_start=0, axes=None, recomb_filename=None, DET=None, figTitle=None, saveFig=False, fileName=None):
     ### plot reco spectrum
     if axes is None:
         fig, axes = plt.subplots(nrows=1, ncols=1, sharex=False, sharey=False, figsize=(6,4))
-    bin_centers, bin_contents, bin_error = get_hist_data(clusters, nbins, data_type, calibrate=calibrate, bin_start=bin_start, recomb_filename=recomb_filenam
-e, DET=DET)
+    bin_centers, bin_contents, bin_error = get_hist_data(clusters, nbins, data_type, calibrate=calibrate, bin_start=bin_start, recomb_filename=recomb_filename, DET=DET)
     if norm == 'area':
         total_bin_contents = np.sum(bin_contents)
         bin_contents = bin_contents / total_bin_contents
@@ -287,6 +285,87 @@ e, DET=DET)
         axes.set_yscale('log')
     if plot_errorbars:
         axes.errorbar(bin_centers, bin_contents, yerr=bin_error,color='k',fmt='o',markersize = 1)
+
+def proximity_cut(clusters_chunk, tile_position, tpc_id, opt_cut_shape, d, ellipse_b):
+    cluster_in_shape = 0
+    hit_to_clusters_dist = np.sqrt((clusters_chunk['x_mid'] - tile_position[0])**2 + \
+                                   (clusters_chunk['y_mid'] - tile_position[1])**2)
+    # can add additional optical cut shapes here as addition elif statements
+    if opt_cut_shape == 'circle':
+        cluster_in_shape = (hit_to_clusters_dist < d) \
+        & (np.abs(clusters_chunk['x_mid']) < 315) \
+        & (np.abs(clusters_chunk['y_mid']) < 630) \
+        & (clusters_chunk['io_group'] == tpc_id)
+    elif opt_cut_shape == 'ellipse':
+        cluster_in_shape = (is_point_inside_ellipse(clusters_chunk['x_mid'], clusters_chunk['y_mid'],tile_position[0], tile_position[1], d, ellipse_b)) & (clusters_chunk['io_group'] == tpc_id)
+    elif opt_cut_shape == 'rect':
+        if tile_position[0] < 0:
+            cluster_in_shape = (clusters_chunk['x_mid'] < tile_position[0]+d) \
+                & (clusters_chunk['y_mid'] > tile_position[1]-304/2) \
+                & (clusters_chunk['y_mid'] < tile_position[1]+304/2) \
+                & (clusters_chunk['io_group'] == tpc_id)
+        elif tile_position[0] > 0:
+            cluster_in_shape = (clusters_chunk['x_mid'] > tile_position[0]-d) \
+                & (clusters_chunk['y_mid'] > tile_position[1]-304/2) \
+                & (clusters_chunk['y_mid'] < tile_position[1]+304/2) \
+                & (clusters_chunk['io_group'] == tpc_id)
+    else:
+        raise ValueError('shape not supported')
+    return cluster_in_shape
+
+def is_point_inside_ellipse(x, y, h, k, a, b):
+    """
+    Check if a point (x, y) is inside an ellipse centered at (h, k) with semi-axes a and b.
+    This is used to determine if a cluster is within an ellipse relative to the middle 
+    of a photon detector tile. 
+
+    Parameters:
+        x (float): x-coordinate of the point to check.
+        y (float): y-coordinate of the point to check.
+        h (float): x-coordinate of the ellipse's center.
+        k (float): y-coordinate of the ellipse's center.
+        a (float): Length of the semi-major axis of the ellipse.
+        b (float): Length of the semi-minor axis of the ellipse.
+
+    Returns:
+        bool: True if the point is inside the ellipse, False otherwise.
+    """
+    return ((x - h)**2 / a**2) + ((y - k)**2 / b**2) <= 1
+
+def apply_proximity_cut(f, shape, d, ellipse_b):
+    clusters = np.array(f['clusters'])
+    light_trig_indices = np.unique(clusters['light_trig_index'][:,0])
+    light_hits_summed = np.array(f['light_hits_summed'])
+    
+    # find start and stop indices for each occurrance of a unix second value
+    unique_index, start_indices = np.unique(clusters['light_trig_index'][:,0], return_index=True)
+    end_indices = np.roll(start_indices, shift=-1)
+    end_indices[-1] = len(clusters) - 1
+    
+    chunk_indices = {}
+    for unix_val, start_idx, end_idx in zip(unique_index, start_indices, end_indices):
+        chunk_indices[unix_val] = (start_idx, end_idx)
+    
+    clusters_mask = np.zeros(len(clusters), dtype=bool)
+    for light_index in light_trig_indices:
+        try:
+            start_index, stop_index = chunk_indices[light_index]
+        except:
+            continue
+        
+        light_hit = light_hits_summed[light_hits_summed['light_trig_index'] == light_index]
+        tpc_id = light_hit['io_group']
+        tile_position = (light_hit['tile_x'], light_hit['tile_y'])
+        clusters_chunk_mask = proximity_cut(clusters[start_index:stop_index], tile_position, tpc_id, shape, d, ellipse_b)
+        #corner_mask  = ((clusters[start_index:stop_index]['y_mid'] >= 304.31) & (clusters[start_index:stop_index]['y_mid'] <= 600)) \
+        #                        | ((clusters[start_index:stop_index]['y_mid'] <= 0) & (clusters[start_index:stop_index]['y_mid'] > -295))
+        clusters_chunk_mask = clusters_chunk_mask# & corner_mask
+        if np.any(clusters_chunk_mask):
+            clusters_mask[start_index:stop_index] = clusters_chunk_mask
+        else:
+            continue
+    
+    return clusters[clusters_mask]
 
 def linear_fit(x, y, error, axes, make_plot=True):
     # Weighted least squares regression
