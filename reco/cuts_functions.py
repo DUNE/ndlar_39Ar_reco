@@ -35,7 +35,7 @@ def get_detector_position(adc: int, channel: int, geometry_data: Dict) -> Union[
     
     return [x, y, z]
 
-def sum_waveforms(voltage_adc1, voltage_adc2, plot_to_adc_channel_dict, adc_channel_to_position, pedestal_range, channels_adc1, channels_adc2):
+def sum_waveforms(voltage_adc1, voltage_adc2, plot_to_adc_channel_dict, adc_channel_to_position, pedestal_range, channels_adc1, channels_adc2, isMod2):
     # Sum the waveforms in a particular tile in a particular event
     position = np.array([0.0, 0.0, 0.0])
     positions = []
@@ -64,6 +64,13 @@ def sum_waveforms(voltage_adc1, voltage_adc2, plot_to_adc_channel_dict, adc_chan
                 if np.size(wvfm) > 0:
                     wvfm_sum = wvfm_sum + wvfm[0] - np.mean(wvfm[0][pedestal_range[0]:pedestal_range[1]]).astype('int16')
     position = position / 6
+    isTPC1 = position[2] < 0
+    if isMod2 and not (((position[1] < 310 and position[1] > 0) or (position[1] > -620 and position[1] < -310)) and isTPC1):
+        position[0] = position[0]*-1
+    if isMod2 and ((position[1] > 310 and position[1] < 620) and isTPC1 and position[0] > 0):
+        position[1] = 155.0975
+    elif isMod2 and ((position[1] > 0 and position[1] < 310) and isTPC1 and position[0] > 0):
+        position[1] = 465.2925
     return wvfm_sum, position, wvfms_det, positions, adc_channels
 
 def add_dtype_to_array(array, dtype_name, dtype_format, new_data, size=None):
