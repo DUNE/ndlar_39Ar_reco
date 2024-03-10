@@ -63,6 +63,9 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     light_wvfms_dtype = np.dtype([('voltage_adc1', 'i4', (nchannels, nsamples)), ('voltage_adc2', 'i4', (nchannels, nsamples))])
     
     clusters = np.array(f_charge['clusters'])
+    #print(len(clusters))
+    #clusters = clusters[np.isin(clusters['id'], clusters_indices_cut)]
+    #print(len(clusters))
     sorted_indices = np.argsort(clusters['unix'])
     clusters[:] = clusters[sorted_indices]
 
@@ -103,12 +106,14 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
         total_events = size // chunk_size
         #print(f'file contains {size // chunk_size} events')
         
-    batch_size = 25 # how many events to load on each iteration
+    batch_size = 1 # how many events to load on each iteration
     batch_size_save = 25
     firstBatch = True
     batch_index = 0
     saveHeader = True
     nBatches = 0
+    isMod2 = input_config_name == 'module2'
+    
     with adc64format.ADC64Reader(input_light_files[0], input_light_files[1]) as reader:
         with tqdm(total=int((size//chunk_size)/batch_size), unit=' chunks', smoothing=0) as pbar:
             while True:
@@ -161,15 +166,10 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
 
                         # correct timestamps
                         if module.detector == 'module0_run1' or module.detector == 'module0_run2':
-                            clock_correction_factor = 0.625
                             tai_s_adc1 = events_file0['time'][evt_index][0]['tai_s']
                             tai_s_adc2 = events_file1['time'][evt_index][0]['tai_s']
-                            tai_ns_adc1 = np.array(tai_ns_adc1*clock_correction_factor + tai_s_adc1*1e9)
-                            tai_ns_adc2 = np.array(tai_ns_adc2*clock_correction_factor + tai_s_adc2*1e9)
-                        else:
-                            clock_correction_factor = 1
-                            tai_ns_adc1 = np.array(tai_ns_adc1)*clock_correction_factor
-                            tai_ns_adc2 = np.array(tai_ns_adc2)*clock_correction_factor
+                            tai_ns_adc1 = tai_ns_adc1*0.625 + tai_s_adc1*1e9
+                            tai_ns_adc2 = tai_ns_adc2*0.625 + tai_s_adc2*1e9
 
                         unix_adc1 = int(events_file0['header'][evt_index][0]['unix']*1e-3)
                         unix_adc2 = int(events_file1['header'][evt_index][0]['unix']*1e-3)
@@ -209,6 +209,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                 #clusters_new = clusters_new[np.isin(clusters_new['id'], clusters_indices_cut)]
                                 #indices_of_clusters = np.array(indices_of_clusters) + start_index
                                 # loop through columns of p.detector tiles
+                                iterate_light_trig_index = False
                                 for i in range(4):
                                     # loop through rows of p.detector tiles
                                     for j in range(4):
@@ -226,10 +227,10 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                             voltage_adc2 = np.array(events_file1['data'][evt_index]['voltage'])
                                             
                                             # this is a summed waveform for one PD tile (sum of 6 SiPMs)
-                                            wvfm_sum, tile_position, wvfms_det, positions, adc_channels = \
+                                            wvfm_sum, tile_position, wvfms_det, positions, summed_channels = \
                                                     sum_waveforms(voltage_adc1, voltage_adc2, plot_to_adc_channel, \
                                                     adc_channel_to_position[i], pedestal_range,\
-                                                    channels_adc1, channels_adc2)
+                                                    channels_adc1, channels_adc2, isMod2)
                                             
                                             if np.size(wvfm_sum) > 0:
                                                 wvfm_max = np.max(wvfm_sum)
@@ -256,7 +257,8 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                                                 break
                                                         clusters_new[index]['t0'] = light_tai_ns
                                                 
-                                                if np.size(clusters_new) > 0:          
+                                                if np.size(clusters_new) > 0:
+                                                    iterate_light_trig_index = True
                                                     nMatches_Selection+=1
                                                     hit_summed = np.zeros((1,), dtype=light_hits_summed_dtype)
                                                     hit_summed['light_trig_index'] = light_trig_index
@@ -274,14 +276,17 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                                         hit_summed['det_type'] = 'LCM'
                                                     else:
                                                         hit_summed['det_type'] = 'ACL'
+                                                    
                                                     if light_trig_index == 0 or batch_index == 0:
                                                         hits_summed_all = hit_summed
+                                                        clusters_new = clusters_new[np.isin(clusters_new['id'], clusters_indices_cut)]
                                                         clusters_keep = clusters_new
                                                     else:
                                                         hits_summed_all = np.concatenate((hits_summed_all, hit_summed))
+                                                        clusters_new = clusters_new[np.isin(clusters_new['id'], clusters_indices_cut)]
                                                         clusters_keep = np.concatenate((clusters_keep, clusters_new))
                                                     if batch_index == batch_size_save:
-                                                        clusters_keep = clusters_keep[np.isin(clusters_keep['id'], clusters_indices_cut)]
+
                                                         one_match_mask = (clusters_keep['light_trig_index'] != -1).sum(axis=1) == 1
                                                         # calculate z_drift values and place in clusters array
                                                         sign = np.zeros(np.sum(one_match_mask), dtype=int)
@@ -300,7 +305,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                                                 z_anode + \
                                                                 sign*(clusters_keep[one_match_mask]['t_max'] - \
                                                                 clusters_keep['t0'][one_match_mask]).astype('f8')*z_drift_factor
-                                                        
+                                                        clusters_keep = clusters_keep[one_match_mask]
                                                         if firstBatch:
                                                             firstBatch = False
                                                             with h5py.File(output_filename, 'a') as f_out:
@@ -312,14 +317,15 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
                                                                 if hits_summed_all.shape[0] > 0:
                                                                     f_out['light_hits_summed'].resize((f_out['light_hits_summed'].shape[0] + hits_summed_all.shape[0]), axis=0)
                                                                     f_out['light_hits_summed'][-hits_summed_all.shape[0]:] = hits_summed_all
-                                                                
+
                                                                 if clusters_keep.shape[0] > 0: 
                                                                     f_out['clusters'].resize((f_out['clusters'].shape[0] + clusters_keep.shape[0]), axis=0)
                                                                     f_out['clusters'][-clusters_keep.shape[0]:] = clusters_keep
                                                             batch_index = 0
                                                     else:
                                                         batch_index+=1
-                                                    light_trig_index += 1
+                                                    if iterate_light_trig_index:
+                                                        light_trig_index += 1
                 pbar.update()
                 if len(events_file0['header']) < batch_size:
                     break
