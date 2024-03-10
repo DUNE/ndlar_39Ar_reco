@@ -289,18 +289,18 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
     
     v_cm_data = 288.28125
     v_ref_data = 1300.78125
-    if DET == 'module-0':
+    if DET == 'module0_run1' or DET == 'module0_run2':
         v_cm_data = 288.28125
         v_ref_data = 1300.78125
-    elif DET == 'module-1':
+    elif DET == 'module1':
         v_cm_data = 284.27734375
         v_ref_data = 1282.71484375
+    elif DET == 'module2' or DET == 'module3':
+        v_cm_data = 438.28125
+        v_ref_data = 1437.3046875
     else:
         v_cm_data = 288.28125
         v_ref_data = 1300.78125 
-    # module-2
-    #v_cm_data = 438.28125
-    #v_ref_data = 1437.3046875
     
     gain_data = 1/221
     gain_sim = 1/221
@@ -536,7 +536,7 @@ def saveNPZ(filename, light_matches, files):
         tile_x_all += light_match_list['tile_x']
         tile_y_all += light_match_list['tile_y']
         det_type_all += light_match_list['det_type']
-        t_all += light_match_list['t_mid']
+        t_all += light_match_list['t']
         t0_all += light_match_list['t0']
         unix_all += light_match_list['unix']
 
