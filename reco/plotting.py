@@ -8,6 +8,7 @@ from tqdm import tqdm
 from scipy import stats
 import matplotlib.colors as mcolors
 from math import ceil
+import pandas as pd
 
 def XY_Hist2D(clusters, figTitle=None, vmin=1e0, vmax=1e3, use_z_cut=True, isSingleCube=False, imageFileName=None, isHits=False, bins=None, hist_range=None):
     ### plot 2D histogram of clusters
@@ -113,8 +114,8 @@ def XZ_Hist2D(clusters, figTitle=None, logYscale=False, vmin=1, vmax=1e3, weight
                      range=[x_min_max,x_min_max],bins = [x_bins,y_bins], \
                      weights=weights, vmin=vmin, vmax=vmax,norm = norm)
     fig.colorbar(H1[3], ax=axes)
-    axes.set_xlabel(r'pixel x [mm]')
-    axes.set_ylabel(r'Reconstructed Drift Coordinate [mm]')
+    axes.set_xlabel(r'z_{reco} [mm]')
+    axes.set_ylabel(r'x_{drift} [mm]')
     axes.set_ylim(x_min_max[0], x_min_max[1])
     axes.set_xlim(x_min_max[0], x_min_max[1])
     fig.suptitle(figTitle)
@@ -122,7 +123,7 @@ def XZ_Hist2D(clusters, figTitle=None, logYscale=False, vmin=1, vmax=1e3, weight
         plt.savefig(imageFileName)
     plt.show()
 
-def ZY_Hist2D(clusters, figTitle=None, vmin=1, vmax=1e3, imageFileName=None, use_z_cut=False, bins=None):
+def ZY_Hist2D(clusters, figTitle=None, vmin=1, vmax=1e3, imageFileName=None, use_z_cut=True, bins=None):
     if bins is not None:
         x_bins = bins[0]
         y_bins = bins[1]
@@ -273,7 +274,7 @@ def make_hist(array, bins, range_start, range_end):
     
     return bincenters, bin_contents, error
 
-def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, recomb_filename=None, bin_start=0):
+def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, recomb_filename=None, bin_start=0, DET=None):
     ### set bin size and histogram range, correct for recombination using NEST, return histogram parameters
     # INPUT: `the_data` is a 1D numpy array of charge cluster charge values (mV)
     #        `bins` is the number of bins to use (this effectively sets the range, the binsize is constant w.r.t. bins)
@@ -296,8 +297,8 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
         v_cm_data = 284.27734375
         v_ref_data = 1282.71484375
     elif DET == 'module2' or DET == 'module3':
-        v_cm_data = 438.28125
-        v_ref_data = 1437.3046875
+        v_cm_data = 478.125
+        v_ref_data = 1567.96875
     else:
         v_cm_data = 288.28125
         v_ref_data = 1300.78125 
@@ -345,7 +346,7 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
         data = data/np.interp(data, charge_ke, recombination)
     
     # get histogram parameters
-    nbins = int(bins)
+    nbins = int(bins / 2)
     bin_centers, bin_contents, bin_error = make_hist(data*eV_per_e, nbins, range_start*eV_per_e,range_end*eV_per_e)
     return bin_centers, bin_contents, bin_error
 
@@ -425,8 +426,10 @@ def corner_cut(clusters, tolerance, special_cases=None):
             xlim, ylim = x_edge, y_edge
         elif dims == 'xz':
             xlim, ylim = x_edge, z_edge
+            #continue
         elif dims == 'zy':
             xlim, ylim = z_edge, y_edge
+            #continue
         for sign in signs:
             dist = np.sqrt((clusters[pos_name_list[0]] - sign[0]*xlim)**2 + (clusters[pos_name_list[1]] - sign[1]*ylim)**2)
             overall_mask = overall_mask & (dist > tolerance)
@@ -450,7 +453,35 @@ def corner_cut(clusters, tolerance, special_cases=None):
                 overall_mask = overall_mask & ((dist > tolerance) | side_mask)
     return overall_mask
         
+def f90_cut(clusters, light_hits):
+    # apply f90 cut to try to isolate alphas
+    indices = []
+    all_f90_values = []
+    for i in range(len(light_hits['samples'])):
+        samples = light_hits['samples'][i]
+        samples = samples - np.mean(samples[40:70])
+        
+        df = pd.DataFrame({'wvfm': samples})    
+        # Apply rolling average
+        samples = df['wvfm'].rolling(window=2).mean()
     
+        # sometimes the pulse starts early; cut these since there are not that many.
+        if np.mean(samples[0:70]) < -50:
+            continue
+        start_point = 72 # ticks
+        window = 6
+        end_point = start_point + int(7000/16)
+        integral_small = np.trapz(samples[start_point:start_point+window+1], dx=16)
+        integral_large = np.trapz(samples[start_point:end_point], dx=16)
+        f90 = integral_small/integral_large
+        
+        if f90 > 0.6 and f90 < 0.8:
+            indices.append(i)
+        all_f90_values.append(f90)
+    indices = np.array(indices)
+    print(f'{len(indices)} alpha-like events')
+    return clusters[np.isin(clusters['light_trig_index'][:,0], indices)], indices, all_f90_values
+
 def is_point_inside_ellipse(x, y, h, k, a, b):
     """
     Check if a point (x, y) is inside an ellipse centered at (h, k) with semi-axes a and b.
@@ -470,41 +501,50 @@ def is_point_inside_ellipse(x, y, h, k, a, b):
     """
     return ((x - h)**2 / a**2) + ((y - k)**2 / b**2) <= 1
 
-def apply_cuts(f, shape, d, ellipse_b, corner_tolerance, special_cases=None):
+def apply_cuts(f, shape, d, ellipse_b, corner_tolerance, use_proximity_cut=True, use_f90_cut=False, use_corner_cut=True,special_cases=None):
     ### apply data cuts, including proximity cut and corner/edge cut
     clusters = np.array(f['clusters'])[(f['clusters']['light_trig_index'] != -1).sum(axis=1) == 1]
     light_trig_indices = np.unique(clusters['light_trig_index'][:,0])
     light_hits_summed = np.array(f['light_hits_summed'])
     
+    f90_values = []
+    if use_f90_cut:
+        clusters, light_trig_indices, f90_values = f90_cut(clusters, light_hits_summed)
+    
     light_matches = {'amplitudes':[], 'x':[], 'y':[], 'z':[], 'q':[], 'io_group':[], 'nhit':[], 'tile_x':[], 'tile_y':[], 'det_type':[], 't0':[], 't':[], 'unix':[]}
-    clusters_mask = np.zeros(len(clusters), dtype=bool)
-    for light_index in light_trig_indices:
-        light_hits = light_hits_summed[light_hits_summed['light_trig_index'] == light_index]
-        for light_hit in light_hits:
-            tpc_id = light_hit['io_group']
-            tile_position = (light_hit['tile_x'], light_hit['tile_y'])
-            clusters_event_mask = clusters['light_trig_index'][:,0] == light_index
-            clusters_event = clusters[clusters_event_mask]
-            clusters_chunk_mask = proximity_cut(clusters_event, tile_position, tpc_id, shape, d, ellipse_b)
-            
-            clusters_chunk_mask = clusters_chunk_mask & corner_cut(clusters_event, corner_tolerance, special_cases)
-            
-            if np.sum(clusters_chunk_mask) == 1:
-                light_matches['amplitudes'].append(light_hit['wvfm_max'])
-                light_matches['x'].append(clusters_event[clusters_chunk_mask][0]['x_mid'])
-                light_matches['y'].append(clusters_event[clusters_chunk_mask][0]['y_mid'])
-                light_matches['z'].append(clusters_event[clusters_chunk_mask][0]['z_drift_mid'])
-                light_matches['q'].append(clusters_event[clusters_chunk_mask][0]['q'])
-                light_matches['nhit'].append(clusters_event[clusters_chunk_mask][0]['nhit'])
-                light_matches['tile_x'].append(light_hit['tile_x'])
-                light_matches['tile_y'].append(light_hit['tile_y'])
-                light_matches['det_type'].append(light_hit['det_type'])
-                light_matches['t'].append(clusters_event[clusters_chunk_mask][0]['t_mid'])
-                light_matches['t0'].append(clusters_event[clusters_chunk_mask][0]['t0'])
-                light_matches['unix'].append(clusters_event[clusters_chunk_mask][0]['unix'])
+    
+    if use_proximity_cut:
+        clusters_mask = np.zeros(len(clusters), dtype=bool)
+        for light_index in light_trig_indices:
+            light_hits = light_hits_summed[light_hits_summed['light_trig_index'] == light_index]
+            for light_hit in light_hits:
+                tpc_id = light_hit['io_group']
+                tile_position = (light_hit['tile_x'], light_hit['tile_y'])
+                clusters_event_mask = clusters['light_trig_index'][:,0] == light_index
+                clusters_event = clusters[clusters_event_mask]
+                clusters_chunk_mask = proximity_cut(clusters_event, tile_position, tpc_id, shape, d, ellipse_b)
                 
-            clusters_mask[clusters_event_mask] = clusters_chunk_mask
-    return clusters[clusters_mask], light_matches
+                if use_corner_cut:
+                    clusters_chunk_mask = clusters_chunk_mask & corner_cut(clusters_event, corner_tolerance, special_cases)
+
+                if np.sum(clusters_chunk_mask) == 1:
+                    light_matches['amplitudes'].append(light_hit['wvfm_max'])
+                    light_matches['x'].append(clusters_event[clusters_chunk_mask][0]['x_mid'])
+                    light_matches['y'].append(clusters_event[clusters_chunk_mask][0]['y_mid'])
+                    light_matches['z'].append(clusters_event[clusters_chunk_mask][0]['z_drift_mid'])
+                    light_matches['q'].append(clusters_event[clusters_chunk_mask][0]['q'])
+                    light_matches['nhit'].append(clusters_event[clusters_chunk_mask][0]['nhit'])
+                    light_matches['tile_x'].append(light_hit['tile_x'])
+                    light_matches['tile_y'].append(light_hit['tile_y'])
+                    light_matches['det_type'].append(light_hit['det_type'])
+                    light_matches['t'].append(clusters_event[clusters_chunk_mask][0]['t_mid'])
+                    light_matches['t0'].append(clusters_event[clusters_chunk_mask][0]['t0'])
+                    light_matches['unix'].append(clusters_event[clusters_chunk_mask][0]['unix'])
+
+                clusters_mask[clusters_event_mask] = clusters_chunk_mask
+        clusters = clusters[clusters_mask]
+    
+    return clusters, light_matches, f90_values
 
 def saveNPZ(filename, light_matches, files):
     ### save clusters/light data for charge light matches
@@ -652,11 +692,13 @@ def matching_purity(clusters, total_time, q_bins=6, q_range=None, plot_vlines=Tr
         for k in range(0,2):
             if k == 0:
                 LSB_min, LSB_max = -525, -325
+                HSB_min, HSB_max = 0, 225
                 SR_min, SR_max = -310.31, 0
                 bincenters = bincenters_io1 
                 bincontents = bincontents_io1
             elif k == 1:
                 LSB_min, LSB_max = 325, 525
+                HSB_min, HSB_max = -225, 0
                 SR_min, SR_max = 0, 310.31
                 bincenters = bincenters_io2
                 bincontents = bincontents_io2
@@ -667,6 +709,27 @@ def matching_purity(clusters, total_time, q_bins=6, q_range=None, plot_vlines=Tr
                 LSB_errorbars[:, j] = np.abs(np.array(list(poisson_interval(C, alpha=1-interval))) - C)
             LSB_sum = np.sum(bincontents[LSB_mask])
 
+            # HSB mask
+            HSB_mask = ((bincenters[:-1] >= HSB_min) & (bincenters[:-1] <= HSB_max))
+            HSB_errorbars = np.zeros((2, np.sum(HSB_mask)))
+            for j,C in enumerate(bincontents[HSB_mask]):
+                HSB_errorbars[:, j] = np.abs(np.array(list(poisson_interval(C, alpha=1-interval))) - C)
+            HSB_sum_errorbars = np.sqrt( np.sum( HSB_errorbars**2 , axis=1) )
+            HSB_sum = np.sum(bincontents[HSB_mask])
+            a = np.max(bincenters[:-1][HSB_mask]) - np.min(bincenters[:-1][HSB_mask]) # time range in HSB
+            b = np.max(bincenters[:-1][LSB_mask]) - np.min(bincenters[:-1][LSB_mask]) # time range in LSB
+            HSB_S = HSB_sum - (a/b)*LSB_sum # est signal counts in HSB
+            sigma_N_HSB = np.sqrt(np.sum( HSB_errorbars**2 , axis=1)) # total error on HSB
+            sigma_M = np.sqrt(np.sum( LSB_errorbars**2 , axis=1)) # total error on LSB
+            sigma_B = (a/b)*sigma_M # total error on LSB scaled to SR
+            sigma_S_HSB =  np.sqrt( sigma_N_HSB**2 + sigma_B**2 ) # error on est real matches in SR
+
+            P_HSB = 1 - (a/b)*LSB_sum/HSB_sum
+            P_errorbars_HSB = (a/b) * LSB_sum/HSB_sum * np.sqrt( ( sigma_M / LSB_sum )**2 + ( HSB_sum_errorbars / HSB_sum )**2 )
+            print(f'Fraction of signal in HSB = {P_HSB}, error = {P_errorbars_HSB}')
+            print(f'Total signal in HSB = {HSB_S}')
+            print(f'Total sum in HSB = {HSB_sum}')
+            
             ### calculate errorbars in signal region for TPC2
             SR_mask = (bincenters[:-1] >= SR_min) & (bincenters[:-1] <= SR_max)
             SR_sum = np.sum(bincontents[SR_mask])
@@ -716,8 +779,8 @@ def matching_purity(clusters, total_time, q_bins=6, q_range=None, plot_vlines=Tr
         axes[0][1].legend(fontsize=4.5, loc='upper left')
         axes[0][0].legend(fontsize=4.5, loc='upper left')
     
-    axes[0][0].set_xlabel(r'Reconstructed Drift Coordinate [mm]')
-    axes[0][1].set_xlabel(r'Reconstructed Drift Coordinate [mm]') 
+    axes[0][0].set_xlabel(r'$x_{drift}$ [mm]')
+    axes[0][1].set_xlabel(r'$x_{drift}$ [mm]') 
     axes[0][1].set_ylabel('Counts')
     axes[0][0].set_ylabel('Counts')
     
@@ -746,6 +809,8 @@ def matching_purity(clusters, total_time, q_bins=6, q_range=None, plot_vlines=Tr
     axes[1][1].set_ylim(min_purity-0.015, max_purity+0.015)
     axes[1][0].set_ylim(min_purity-0.015, max_purity+0.015)
     
+    print(f'tpc 1 rates: {np.array(real_matches_io1)/total_time}')
+    print(f'tpc 2 rates: {np.array(real_matches_io2)/total_time}')
     axes[2][0].errorbar(q_for_plot, np.array(real_matches_io1)/total_time, xerr=xerr,yerr=np.array(real_matches_error_io1).transpose()/total_time,color='k',fmt='o',markersize = 0.5, linewidth=1)
     #fig.suptitle('Purity Fraction of Real Charge-Light Matched Charge Clusters \n (module-1, 5 hrs of data, 2022_02_08)')
     axes[2][1].set_xlabel('Cluster Charge [ke-]')
@@ -763,6 +828,146 @@ def matching_purity(clusters, total_time, q_bins=6, q_range=None, plot_vlines=Tr
     if imageFileName is not None:
         plt.savefig(imageFileName)
     plt.show()
+    
+def ACL_distribution(clusters_all, nbins, figTitle=None):
+    z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
+    y_mask = (clusters_all['y_mid'] > 0) & (clusters_all['y_mid'] < 310)
+    x_mask = clusters_all['x_mid'] > 0
+    y_1, z_1 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+
+    z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
+    y_mask = (clusters_all['y_mid'] > -620) & (clusters_all['y_mid'] < -310)
+    x_mask = clusters_all['x_mid'] > 0
+    y_2, z_2 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_2 += 620
+
+    z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
+    y_mask = (clusters_all['y_mid'] > 0) & (clusters_all['y_mid'] < 310)
+    x_mask = clusters_all['x_mid'] < 0
+    y_3, z_3 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+
+    z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
+    y_mask = (clusters_all['y_mid'] > -620) & (clusters_all['y_mid'] < -310)
+    x_mask = clusters_all['x_mid'] < 0
+    y_4, z_4 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_4 += 620
+
+    z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
+    y_mask = (clusters_all['y_mid'] > 0) & (clusters_all['y_mid'] < 310)
+    x_mask = clusters_all['x_mid'] > 0
+    y_5, z_5 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    z_5 *= -1
+
+    z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
+    y_mask = (clusters_all['y_mid'] > -620) & (clusters_all['y_mid'] < -310)
+    x_mask = clusters_all['x_mid'] > 0
+    y_6, z_6 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_6 += 620
+    z_6 *= -1
+
+    z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
+    y_mask = (clusters_all['y_mid'] > 0) & (clusters_all['y_mid'] < 310)
+    x_mask = clusters_all['x_mid'] < 0
+    y_7, z_7 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    z_7 *= -1
+
+    z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
+    y_mask = (clusters_all['y_mid'] > -620) & (clusters_all['y_mid'] < -310)
+    x_mask = clusters_all['x_mid'] < 0
+    y_8, z_8 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_8 += 620
+    z_8 *= -1
+
+    y_all = np.concatenate((y_1, y_2, y_3, y_4, y_5, y_6, y_7, y_8))
+    z_all = np.concatenate((z_1, z_2, z_3, z_4, z_5, z_6, z_7, z_8))
+
+    # Create a 2D histogram
+    hist, xedges, yedges = np.histogram2d(y_all, z_all, bins=nbins, range=[[0, 310],[0, 310]])
+
+    # Define the extent of the plot
+    extent = [0, 310, 0, 310]
+
+    # Plot the contour plot
+    from matplotlib.colors import LogNorm
+    #plt.contour(hist, extent=extent)
+    plt.imshow(hist, extent=[0, 310, 0, 310], origin='lower', aspect='auto')
+    plt.xlabel(r'z_{drift} [mm]')
+    plt.ylabel('y [mm]')
+    plt.colorbar()
+    if figTitle is not None:
+        plt.savefig(figTitle)
+        
+def LCM_distribution(clusters_all, nbins, figTitle=None):
+    z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
+    y_mask = (clusters_all['y_mid'] > 0+310) & (clusters_all['y_mid'] < 310+310)
+    x_mask = clusters_all['x_mid'] > 0
+    y_1, z_1 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_1 -= 310
+
+    z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
+    y_mask = (clusters_all['y_mid'] > -620+310) & (clusters_all['y_mid'] < -310+310)
+    x_mask = clusters_all['x_mid'] > 0
+    y_2, z_2 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_2 -= -310
+
+    z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
+    y_mask = (clusters_all['y_mid'] > 0+310) & (clusters_all['y_mid'] < 310+310)
+    x_mask = clusters_all['x_mid'] < 0
+    y_3, z_3 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_3 -= 310
+
+    z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
+    y_mask = (clusters_all['y_mid'] > -620+310) & (clusters_all['y_mid'] < -310+310)
+    x_mask = clusters_all['x_mid'] < 0
+    y_4, z_4 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_4 -= -310
+
+    z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
+    y_mask = (clusters_all['y_mid'] > 0+310) & (clusters_all['y_mid'] < 310+310)
+    x_mask = clusters_all['x_mid'] > 0
+    y_5, z_5 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_5 -= 310
+    z_5 *= -1
+
+    z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
+    y_mask = (clusters_all['y_mid'] > -620+310) & (clusters_all['y_mid'] < -310+310)
+    x_mask = clusters_all['x_mid'] > 0
+    y_6, z_6 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_6 -= -310
+    z_6 *= -1
+
+    z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
+    y_mask = (clusters_all['y_mid'] > 0+310) & (clusters_all['y_mid'] < 310+310)
+    x_mask = clusters_all['x_mid'] < 0
+    y_7, z_7 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_7 -= 310
+    z_7 *= -1
+
+    z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
+    y_mask = (clusters_all['y_mid'] > -620+310) & (clusters_all['y_mid'] < -310+310)
+    x_mask = clusters_all['x_mid'] < 0
+    y_8, z_8 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_8 -= -310
+    z_8 *= -1
+
+    y_all = np.concatenate((y_1, y_2, y_3, y_4, y_5, y_6, y_7, y_8))
+    z_all = np.concatenate((z_1, z_2, z_3, z_4, z_5, z_6, z_7, z_8))
+
+    # Create a 2D histogram
+    hist, xedges, yedges = np.histogram2d(y_all, z_all, bins=nbins, range=[[0, 310],[0, 310]])
+
+    # Define the extent of the plot
+    extent = [0, 310, 0, 310]
+
+    # Plot the contour plot
+    from matplotlib.colors import LogNorm
+    #plt.contour(hist, extent=extent)
+    plt.imshow(hist, extent=[0, 310, 0, 310], origin='lower', aspect='auto')
+    plt.xlabel(r'z_{drift} [mm]')
+    plt.ylabel('y [mm]')
+    plt.colorbar()
+    if figTitle is not None:
+        plt.savefig(figTitle)
 def get_charge_MC(nFiles_dict, folders_MC, filename_ending_MC, nbins, do_calibration, recomb_filename,disable_alphas=False, disable_gammas=False, disable_betas=False):
     # Isotope ratios
     isotopes_ratios_betas_gammas = { 
