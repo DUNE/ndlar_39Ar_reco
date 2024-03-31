@@ -33,7 +33,7 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
             v_calib[i] = np.array([v_pedestal_sim, v_cm_sim, v_ref_sim])
     """
     
-    xyz_values, ts_inmm, charge = [], [], []
+    xyz_values, ts_inmm, charge, adcs = [], [], [], []
     v_ped, v_cm, v_ref, unique_ids = [], [], [], []
     packets_keep_mask = np.zeros(len(packets), dtype=bool)
     len_keys = len(list(pixel_xy.keys())[0])
@@ -71,11 +71,15 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
                     else:
                         vref_mv = config_dict[unique_id]['vref_mv']
                         vcm_mv = config_dict[unique_id]['vcm_mv']
-                    charge.append(adcs_to_mV(packets[i]['dataword'], vref_mv,\
-                               vcm_mv, pedestal_dict[unique_id]['pedestal_mv']))
+                    q, adcs_corr = adcs_to_mV(packets[i]['dataword'], vref_mv,\
+                           vcm_mv, pedestal_dict[unique_id]['pedestal_mv'])
+                    charge.append(q)
+                    adcs.append(adcs_corr)
                 else:
-                    charge.append(adcs_to_mV(packets[i]['dataword'], v_ref_sim,\
-                               v_cm_sim, v_pedestal_sim))
+                    q, adcs_corr = adcs_to_mV(packets[i]['dataword'], v_ref_sim,\
+                               v_cm_sim, v_pedestal_sim)
+                    charge.append(q)
+                    adcs.append(adcs_corr)
         else:
             #print(f'KeyError {(io_group, io_channel, chip_id, channel_id)}')
             io_channel_indices = np.where(io_channels_all == io_channel)
@@ -98,11 +102,15 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
                             else:
                                 vref_mv = config_dict[unique_id]['vref_mv']
                                 vcm_mv = config_dict[unique_id]['vcm_mv']
-                            charge.append(adcs_to_mV(packets[i]['dataword'], vref_mv,\
-                                       vcm_mv, pedestal_dict[unique_id]['pedestal_mv']))
+                            q, adcs_corr = adcs_to_mV(packets[i]['dataword'], vref_mv,\
+                                       vcm_mv, pedestal_dict[unique_id]['pedestal_mv'])
+                            charge.append(q)
+                            adcs.append(adcs_corr)
                         else:
-                            charge.append(adcs_to_mV(packets[i]['dataword'], v_ref_sim,\
-                                       v_cm_sim, v_pedestal_sim))
+                            q, adcs_corr = adcs_to_mV(packets[i]['dataword'], v_ref_sim,\
+                                       v_cm_sim, v_pedestal_sim)
+                            charge.append(q)
+                            adcs.append(adcs_corr)
                     break
             if dict_values is None:
                 total_keyerrors += 1
@@ -110,6 +118,7 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
     xyz_values = np.array(xyz_values)
     ts_inmm = np.array(ts_inmm)
     charge = np.array(charge)
+    adcs = np.array(adcs)
     unique_ids = np.array(unique_ids)
     
     # adjust coordinates by TPC offsets, if there's >1 module
@@ -122,7 +131,7 @@ def zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, disabled_channel_IDs, 
     #        pass
     
     txyz = np.hstack((ts_inmm[:, np.newaxis], xyz_values))
-    return txyz, packets_keep_mask, charge, unique_ids
+    return txyz, packets_keep_mask, charge, adcs, unique_ids
     #return txyz, packets_keep_mask, v_calib[:,0], v_calib[:,1], v_calib[:,2], unique_ids
 
 def cluster_packets(eps,min_samples,txyz):
@@ -141,7 +150,7 @@ def getEventIDs(txyz, mc_assn, tracks, event_ids):
         event_id = tracks_index[consts.EVENT_SEPARATOR]
         event_ids[i] = event_id
 
-def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
+def find_charge_clusters(labels, txyz, charge, adcs, unix, io_group, unique_ids, \
                          max_cluster_index, mc_assn, tracks,save_hits):
     ### Make hits and clusters datasets from DBSCAN clusters and corresponding hits
     # Inputs: 
@@ -160,6 +169,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
     io_group = io_group[indices_sorted]
     
     q_vals = np.bincount(labels, weights=charge)
+    adc_vals = np.bincount(labels, weights=adcs)
     
     # get event IDs if MC
     event_ids = np.zeros(len(txyz))
@@ -172,6 +182,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
         # add hits to hits dataset
         hits = np.zeros((len(labels),), dtype=consts.hits_dtype)
         hits['q'] = charge
+        hits['adcs'] = adcs.astype('i4')
         hits['io_group'] = io_group
         hits['t'] = (txyz[:,0]*mm_to_ns).astype('i8')
         hits['x'] = txyz[:,1]
@@ -198,6 +209,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
     io_group_vals = np.bincount(labels, weights=io_group)[n_vals_mask]
     unix_vals = np.bincount(labels, weights=unix)[n_vals_mask]
     q_vals = q_vals[n_vals_mask]
+    adc_vals = adc_vals[n_vals_mask]
     n_vals = n_vals[n_vals_mask] # get rid of n_vals that are 0, otherwise get divide by 0 later
     
     x_min = np.array(list(map(min, label_x)))
@@ -211,6 +223,7 @@ def find_charge_clusters(labels, txyz, charge, unix, io_group, unique_ids, \
     clusters['id'] = np.arange(0, len(n_vals), 1, dtype='i4') + max_cluster_index
     clusters['nhit'] = n_vals
     clusters['q'] = q_vals
+    clusters['adcs'] = adc_vals.astype('i4')
     clusters['unix'] = (unix_vals/n_vals).astype('i8') # all of these hits should have the same unix anyway
     clusters['io_group'] = (io_group_vals/n_vals).astype('i4')
     clusters['t_min'] = min_timestamps
@@ -299,7 +312,7 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, max_cluster_index, \
     
     start = time.time()
     # zip up x, y, z, and t values for clustering
-    txyz, packets_keep_mask, charge, unique_ids = zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, \
+    txyz, packets_keep_mask, charge, adcs, unique_ids = zip_pixel_tyz(packets, ts, mc_assn, pixel_xy, module, \
                                         disabled_channel_IDs, detprop, pedestal_dict, config_dict, v_dac)
     zip_time = time.time() - start
     
@@ -321,7 +334,7 @@ def analysis(packets, pixel_xy, mc_assn, tracks, module, max_cluster_index, \
     io_group = np.copy(packets['io_group'])
     if np.size(labels) > 0:
         results = find_charge_clusters(labels, txyz,\
-            charge=charge,\
+            charge=charge, adcs=adcs, \
             unix=unix, io_group=io_group,\
             unique_ids=unique_ids,\
             max_cluster_index=max_cluster_index,\

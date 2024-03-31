@@ -10,7 +10,8 @@ def adcs_to_mV(adcs, v_ref, v_cm, v_ped):
     # Outputs:
     #   array of charge in mV
     charge = (adcs.astype('float64')/float(ADC_COUNTS)*(v_ref - v_cm)+v_cm-v_ped)
-    return charge
+    adcs_corr = np.around(adcs.astype('float64') - (v_ped - v_cm)/(v_ref - v_cm) * 256)
+    return charge, adcs_corr
 
 def PACMAN_drift(packets, module):
     # only supports module-0
