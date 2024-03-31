@@ -35,7 +35,7 @@ def main(input_clusters_file, output_filename, *input_light_files, input_config_
     # get clusters
     f_charge = h5py.File(input_clusters_file, 'r')
     
-    rate_threshold = 0.5 # channel rate (Hz) threshold for disabled channels cut
+    rate_threshold = 1 # channel rate (Hz) threshold for disabled channels cut
     clusters_indices_cut = disabled_channel_cut(f_charge, rate_threshold, max_hits)
     
     hit_threshold_LCM = module.hit_threshold_LCM
