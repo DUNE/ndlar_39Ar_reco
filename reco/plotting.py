@@ -187,7 +187,7 @@ def ZY_Hist2D(clusters, figTitle=None, vmin=1, vmax=1e3, imageFileName=None, use
         plt.savefig(imageFileName)
     plt.show()
     
-def plot_2D_statistic(clusters, values, stat, plot_type, xlabel=None, ylabel=None, figTitle=None, vmin=None, vmax=None, log_scale=False, isSingleCube=False, imageFileName=None):
+def plot_2D_statistic(clusters, values, stat, plot_type, xlabel=None, ylabel=None, figTitle=None, vmin=None, vmax=None, log_scale=False, isSingleCube=False, imageFileName=None, isNotClusters=False):
     if plot_type == 'xy':
         if isSingleCube:
             ncols=1
@@ -197,6 +197,9 @@ def plot_2D_statistic(clusters, values, stat, plot_type, xlabel=None, ylabel=Non
             figsize=(8,6)
     elif plot_type == 'xz':
         ncols=1
+        figsize=(8,6)
+    elif plot_type == 'zy':
+        ncols=2
         figsize=(8,6)
     else:
         raise Exception('plot type not supported')
@@ -235,10 +238,31 @@ def plot_2D_statistic(clusters, values, stat, plot_type, xlabel=None, ylabel=Non
             axes[0].set_xlim(x_min_max[0], x_min_max[1])
             axes[1].set_ylim(y_min_max[0], y_min_max[1])
             axes[1].set_xlim(x_min_max[0], x_min_max[1])
+    elif plot_type == 'zy':
+        y_min_max = [-620,620]
+        x_min_max = [-310,310]
+        RANGE=[x_min_max, y_min_max]
+        x_bins = 140
+        y_bins = 2*x_bins
+        axes[0].set_xlabel(r'$z_{reco}$ [mm]')
+        axes[1].set_xlabel(r'$z_{reco}$ [mm]')
+        axes[0].set_ylabel(r'$y_{reco}$ [mm]')
+        axes[0].set_ylim(y_min_max[0], y_min_max[1])
+        axes[0].set_xlim(x_min_max[0], x_min_max[1])
+        axes[1].set_ylim(y_min_max[0], y_min_max[1])
+        axes[1].set_xlim(x_min_max[0], x_min_max[1])
     if plot_type == 'xy':
-        hist_data = stats.binned_statistic_2d(clusters['x_mid'], clusters['y_mid'], values, statistic=stat, bins=[x_bins,y_bins], range=RANGE)
+        x = clusters['x_mid']
+        y = clusters['y_mid']
+        hist_data = stats.binned_statistic_2d(x, y, values, statistic=stat, bins=[x_bins,y_bins], range=RANGE)
+    elif plot_type == 'zy':
+        x = clusters['z_drift_mid']
+        y = clusters['y_mid']
+        hist_data = stats.binned_statistic_2d(x, y, values, statistic=stat, bins=[x_bins,y_bins], range=RANGE)
     elif plot_type == 'xz':
-        hist_data = stats.binned_statistic_2d(clusters['x_mid'], clusters['z_drift_mid'], values, statistic=stat, bins=[x_bins,y_bins], range=[RANGE, RANGE])
+        x = clusters['x_mid']
+        y = clusters['z_drift_mid']
+        hist_data = stats.binned_statistic_2d(x, y, values, statistic=stat, bins=[x_bins,y_bins], range=[RANGE, RANGE])
 
     if log_scale:
         norm = mcolors.LogNorm(vmin=np.nanmin(hist_data.statistic), vmax=np.nanmax(hist_data.statistic))
@@ -246,6 +270,12 @@ def plot_2D_statistic(clusters, values, stat, plot_type, xlabel=None, ylabel=Non
         norm = None
     if plot_type == 'xz':
         im = axes.imshow(hist_data.statistic.T, cmap=cmap,norm=norm, origin='lower', extent=[RANGE[0], RANGE[1], RANGE[0], RANGE[1]])
+        colorbar = plt.colorbar(im, ax=axes)
+        im.set_clim(vmin, vmax)
+    elif plot_type == 'zy':
+        im = axes[0].imshow(hist_data.statistic.T, cmap=cmap,norm=norm, origin='lower', extent=[RANGE[0][0], RANGE[0][1], RANGE[1][0], RANGE[1][1]])
+        im.set_clim(vmin, vmax)
+        im = axes[1].imshow(hist_data.statistic.T, cmap=cmap, norm=norm, origin='lower', extent=[RANGE[0][0], RANGE[0][1], RANGE[1][0], RANGE[1][1]])
         colorbar = plt.colorbar(im, ax=axes)
         im.set_clim(vmin, vmax)
     elif plot_type == 'xy':
@@ -274,7 +304,7 @@ def make_hist(array, bins, range_start, range_end):
     
     return bincenters, bin_contents, error
 
-def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, recomb_filename=None, bin_start=0, DET=None):
+def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, recomb_filename=None, bin_start=0, DET=None, is_adcs=False):
     ### set bin size and histogram range, correct for recombination using NEST, return histogram parameters
     # INPUT: `the_data` is a 1D numpy array of charge cluster charge values (mV)
     #        `bins` is the number of bins to use (this effectively sets the range, the binsize is constant w.r.t. bins)
@@ -305,22 +335,33 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
     
     gain_data = 1/221
     gain_sim = 1/221
-    data = np.copy(clusters['q'])
+    if is_adcs:
+        data = np.copy(clusters['adcs'])
+    else:
+        data = np.copy(clusters['q'])
     
     # set parameters for data or MC for determining bin size
     vcm_mv = v_cm_data
     vref_mv = v_ref_data
     gain = gain_data
-    if calibrate:
-        data = data/gain * 1e-3
     
     if data_type == 'MC':
         vcm_mv = v_cm_sim
         vref_mv = v_ref_sim
         gain = gain_sim
     LSB = (vref_mv - vcm_mv)/256
+    
     if calibrate:
-        width = LSB / gain * 1e-3
+        if is_adcs:  
+            data = data/gain * 1e-3 * LSB
+        else:
+            data = data/gain * 1e-3
+    
+    if calibrate:
+        if is_adcs:
+            width = LSB / gain * 1e-3 * LSB
+        else:
+            width = LSB / gain * 1e-3
     else:
         width = LSB
     
@@ -343,18 +384,19 @@ def get_hist_data(clusters, bins, data_type, calibrate=False, binwidth=None, rec
         energies = np.array(recomb_file['NEST']['E_start'])
         recombination = np.array(recomb_file['NEST']['R'])
         charge_ke = energies / 23.6 * recombination
-        data = data/np.interp(data, charge_ke, recombination)
+        values = np.interp(data, charge_ke, recombination)
+        data = data/values
     
     # get histogram parameters
-    nbins = int(bins / 2)
+    nbins = int(bins/2)
     bin_centers, bin_contents, bin_error = make_hist(data*eV_per_e, nbins, range_start*eV_per_e,range_end*eV_per_e)
     return bin_centers, bin_contents, bin_error
 
-def plotRecoSpectrum(clusters, nbins=100, data_type='data', color='b', linewidth=1, label=None, linestyle=None, norm=None,plot_errorbars=False, useYlog=False,calibrate=True, bin_start=0, axes=None, recomb_filename=None, DET=None, figTitle=None, imageFileName=None):
+def plotRecoSpectrum(clusters, nbins=100, data_type='data', color='b', linewidth=1, label=None, linestyle=None, norm=None,plot_errorbars=False, useYlog=False,calibrate=True, bin_start=0, axes=None, recomb_filename=None, DET=None, figTitle=None, imageFileName=None, is_adcs=False):
     ### plot reco spectrum
     if axes is None:
         fig, axes = plt.subplots(nrows=1, ncols=1, sharex=False, sharey=False, figsize=(6,4))
-    bin_centers, bin_contents, bin_error = get_hist_data(clusters, nbins, data_type, calibrate=calibrate, bin_start=bin_start, recomb_filename=recomb_filename, DET=DET)
+    bin_centers, bin_contents, bin_error = get_hist_data(clusters, nbins, data_type, calibrate=calibrate, bin_start=bin_start, recomb_filename=recomb_filename, DET=DET, is_adcs=is_adcs)
     if norm == 'area':
         total_bin_contents = np.sum(bin_contents)
         bin_contents = bin_contents / total_bin_contents
@@ -380,6 +422,7 @@ def plotRecoSpectrum(clusters, nbins=100, data_type='data', color='b', linewidth
         axes.errorbar(bin_centers, bin_contents, yerr=bin_error,color='k',fmt='o',markersize = 1)
     if imageFileName is not None:
         plt.savefig(imageFileName)
+    return bin_contents
 
 def proximity_cut(clusters_chunk, tile_position, tpc_id, opt_cut_shape, d, ellipse_b):
     cluster_in_shape = np.zeros(len(clusters_chunk), dtype=bool)
@@ -829,57 +872,58 @@ def matching_purity(clusters, total_time, q_bins=6, q_range=None, plot_vlines=Tr
         plt.savefig(imageFileName)
     plt.show()
     
-def ACL_distribution(clusters_all, nbins, figTitle=None):
+def ACL_distribution(clusters_all, nbins, figTitle=None, weight_type=None):
     z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
     y_mask = (clusters_all['y_mid'] > 0) & (clusters_all['y_mid'] < 310)
     x_mask = clusters_all['x_mid'] > 0
-    y_1, z_1 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_1, z_1, q_1 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid'], clusters_all[z_mask & y_mask & x_mask]['q']*221*1e-3
 
     z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
     y_mask = (clusters_all['y_mid'] > -620) & (clusters_all['y_mid'] < -310)
     x_mask = clusters_all['x_mid'] > 0
-    y_2, z_2 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_2, z_2, q_2 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid'], clusters_all[z_mask & y_mask & x_mask]['q']*221*1e-3
     y_2 += 620
 
     z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
     y_mask = (clusters_all['y_mid'] > 0) & (clusters_all['y_mid'] < 310)
     x_mask = clusters_all['x_mid'] < 0
-    y_3, z_3 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_3, z_3, q_3 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid'], clusters_all[z_mask & y_mask & x_mask]['q']*221*1e-3
 
     z_mask = (clusters_all['z_drift_mid'] > 0) & (clusters_all['z_drift_mid'] < 310)
     y_mask = (clusters_all['y_mid'] > -620) & (clusters_all['y_mid'] < -310)
     x_mask = clusters_all['x_mid'] < 0
-    y_4, z_4 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_4, z_4, q_4 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid'], clusters_all[z_mask & y_mask & x_mask]['q']*221*1e-3
     y_4 += 620
 
     z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
     y_mask = (clusters_all['y_mid'] > 0) & (clusters_all['y_mid'] < 310)
     x_mask = clusters_all['x_mid'] > 0
-    y_5, z_5 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_5, z_5, q_5 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid'], clusters_all[z_mask & y_mask & x_mask]['q']*221*1e-3
     z_5 *= -1
 
     z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
     y_mask = (clusters_all['y_mid'] > -620) & (clusters_all['y_mid'] < -310)
     x_mask = clusters_all['x_mid'] > 0
-    y_6, z_6 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_6, z_6, q_6 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid'], clusters_all[z_mask & y_mask & x_mask]['q']*221*1e-3
     y_6 += 620
     z_6 *= -1
 
     z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
     y_mask = (clusters_all['y_mid'] > 0) & (clusters_all['y_mid'] < 310)
     x_mask = clusters_all['x_mid'] < 0
-    y_7, z_7 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_7, z_7, q_7= clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid'], clusters_all[z_mask & y_mask & x_mask]['q']*221*1e-3
     z_7 *= -1
 
     z_mask = (clusters_all['z_drift_mid'] < 0) & (clusters_all['z_drift_mid'] > -310)
     y_mask = (clusters_all['y_mid'] > -620) & (clusters_all['y_mid'] < -310)
     x_mask = clusters_all['x_mid'] < 0
-    y_8, z_8 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid']
+    y_8, z_8, q_8 = clusters_all[z_mask & y_mask & x_mask]['y_mid'], clusters_all[z_mask & y_mask & x_mask]['z_drift_mid'], clusters_all[z_mask & y_mask & x_mask]['q']*221*1e-3
     y_8 += 620
     z_8 *= -1
 
     y_all = np.concatenate((y_1, y_2, y_3, y_4, y_5, y_6, y_7, y_8))
     z_all = np.concatenate((z_1, z_2, z_3, z_4, z_5, z_6, z_7, z_8))
+    q_all = np.concatenate((q_1, q_2, q_3, q_4, q_5, q_6, q_7, q_8))
 
     # Create a 2D histogram
     hist, xedges, yedges = np.histogram2d(y_all, z_all, bins=nbins, range=[[0, 310],[0, 310]])
@@ -887,13 +931,24 @@ def ACL_distribution(clusters_all, nbins, figTitle=None):
     # Define the extent of the plot
     extent = [0, 310, 0, 310]
 
-    # Plot the contour plot
-    from matplotlib.colors import LogNorm
-    #plt.contour(hist, extent=extent)
-    plt.imshow(hist, extent=[0, 310, 0, 310], origin='lower', aspect='auto')
-    plt.xlabel(r'z_{drift} [mm]')
-    plt.ylabel('y [mm]')
-    plt.colorbar()
+    if weight_type == 'q':
+        norm = None
+        fig, axes = plt.subplots(nrows=1, ncols=1, sharex=False, sharey=False, figsize=figsize)
+        cmap = plt.cm.jet
+        hist_data = stats.binned_statistic_2d(y_all, z_all, q_all, statistic='mean', bins=[x_bins,y_bins], range=[[0, 310], [0, 310]])
+        im = axes.imshow(hist_data.statistic.T, cmap=cmap,norm=norm, origin='lower', extent=[0, 310, 0, 310])
+        colorbar = plt.colorbar(im, ax=axes)
+        axes.set_xlabel(r'$z_{drift}$ [mm]')
+        axes.set_ylabel('y [mm]')
+        #im.set_clim(vmin, vmax)
+    else:
+        # Plot the contour plot
+        from matplotlib.colors import LogNorm
+        #plt.contour(hist, extent=extent)
+        plt.imshow(hist, extent=[0, 310, 0, 310], origin='lower', aspect='auto')
+        plt.xlabel(r'$z_{drift}$ [mm]')
+        plt.ylabel('y [mm]')
+        plt.colorbar()
     if figTitle is not None:
         plt.savefig(figTitle)
         
@@ -963,7 +1018,7 @@ def LCM_distribution(clusters_all, nbins, figTitle=None):
     from matplotlib.colors import LogNorm
     #plt.contour(hist, extent=extent)
     plt.imshow(hist, extent=[0, 310, 0, 310], origin='lower', aspect='auto')
-    plt.xlabel(r'z_{drift} [mm]')
+    plt.xlabel(r'$z_{drift}$ [mm]')
     plt.ylabel('y [mm]')
     plt.colorbar()
     if figTitle is not None:
