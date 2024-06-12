@@ -21,7 +21,9 @@ min_samples = 1
 
 # matching
 v_drift = 0.16 # cm/usec, 500V/cm
+z_drift_factor = 10*v_drift/1e3
 drift_distance = 30.27 # cm
+gain = 221 # e/mV
 
 mm_to_ns = 1/(v_drift*1e1) * 1e3
 
