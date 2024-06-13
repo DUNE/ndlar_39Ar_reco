@@ -4,7 +4,6 @@ Command-line interface to the matching between clusters and light triggers.
 """
 import fire
 import numpy as np
-#from tqdm import TQDM
 import tqdm
 import h5py
 import os
@@ -14,11 +13,6 @@ from adc64format import adc64format
 from cuts_functions import *
 import loading
 from sklearn.cluster import DBSCAN
-from numba import jit
-
-#@jit
-def get_unique_id(io_group, io_channel, chip_id, channel_id):
-    return ((io_group * 256 + io_channel) * 256 + chip_id)*64 + channel_id
 
 def get_pixel_positions(packets, ts, pixel_xy):
     xyz_values, ts_inmm, unique_ids = [], [], []
@@ -31,8 +25,7 @@ def get_pixel_positions(packets, ts, pixel_xy):
         else:
             io_group = 2
         io_channel, chip_id, channel_id = packets[i]['io_channel'], packets[i]['chip_id'], packets[i]['channel_id']
-        #unique_id = ((io_group * 256 + io_channel) * 256 + chip_id)*64 + channel_id
-        unique_id = get_unique_id(io_group, io_channel, chip_id, channel_id)
+        unique_id = ((io_group * 256 + io_channel) * 256 + chip_id)*64 + channel_id
         dict_values = pixel_xy.get((io_group, io_channel, chip_id, channel_id))
         
         if dict_values is not None:
@@ -168,28 +161,29 @@ def main(input_packets_file, output_filename, *input_light_files, input_config_n
 
     saveHeader = True
     isMod2 = input_config_name == 'module2'
-    
+    batch_size = 1
     with adc64format.ADC64Reader(input_light_files[0], input_light_files[1]) as reader:
-        with tqdm(total=total_events, unit=' events', smoothing=0) as pbar:
+        with tqdm(total=int(total_events/batch_size), unit=' events', smoothing=0) as pbar:
             event_index = 0
             while True:
                 if event_index > total_events:
                     break
                 else:
-                    event_index += 1
-                events = reader.next(1)
+                    event_index += batch_size
+                events = reader.next(batch_size)
                 # get matched events between multiple files
                 if events is not None:
                     events_file0, events_file1 = events
                 else:
                     continue
-
+                
                 # loop through events in this batch and do matching to charge for each event
                 for evt_index in range(len(events_file0['header'])):
                     if events_file0['header'][evt_index] is not None and events_file1['header'][evt_index] is not None:
                     
                         # save header once to file
                         if saveHeader:
+                            
                             channels_adc1 = events_file0['data'][evt_index]['channel']
                             channels_adc2 = events_file1['data'][evt_index]['channel']
                             
@@ -228,14 +222,14 @@ def main(input_packets_file, output_filename, *input_light_files, input_config_n
                             tai_s_adc2 = events_file1['time'][evt_index][0]['tai_s']
                             tai_ns_adc1 = tai_ns_adc1*0.625 + tai_s_adc1*1e9
                             tai_ns_adc2 = tai_ns_adc2*0.625 + tai_s_adc2*1e9
-
+                        
                         unix_adc1 = int(events_file0['header'][evt_index][0]['unix']*1e-3)
                         unix_adc2 = int(events_file1['header'][evt_index][0]['unix']*1e-3)
                         
                         # using these timestamps for matching
                         light_tai_ns = (tai_ns_adc1+tai_ns_adc2)/2
                         light_unix_s = int(unix_adc1)
-
+  
                         # only match light trig to packets with same unix second
                         try:
                             start_index, stop_index = unix_chunk_indices[light_unix_s]
