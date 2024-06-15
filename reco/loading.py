@@ -5,6 +5,8 @@ import numpy as np
 import h5py
 from consts import vdda, mean_trunc
 from tqdm import tqdm
+import os
+import json
 
 def load_disabled_channels_list(module):
     if module.use_disabled_channels_list:
@@ -122,60 +124,77 @@ def load_light_geometry(light_geometry_path):
         geometry_data = yaml.safe_load(file)
     return geometry_data
 
-def adc2mv(adc, ref, cm, bits=8):
-    return (ref-cm) * adc/(2**bits) + cm
+def adc2mv(adc, ref, cm):
+    return (ref-cm) * adc/256 + cm
 
-def dac2mv(dac, max, bits=8):
-    return max * dac/(2**bits)
+def dac2mv(dac, max):
+    return max * dac/256
 
-def load_pedestals(pedestal_file, vref_dac, vcm_dac):
+def load_pedestals(pedestal_file, vref_mv, vcm_mv):
     ### Calculate channel by channel pedestals from pedestal h5 file
     ### Adapted from larpix-v2-testing-scripts
-    json_file = 'pedestal/' + pedestal_file.split('.h5')[0] + '_evd_ped.json'
+    json_file = os.path.basename(pedestal_file).strip('.h5')+'evd_ped.json'
     
-    import os
-    # if the pedestal json doesn't already exist, then load the h5 file and calculate pedestals
-    if not os.path.exists(json_file):
-        f = h5py.File(pedestal_file,'r')
-        good_data_mask = f['packets']['packet_type'] == 0
-        good_data_mask = np.logical_and(f['packets']['valid_parity'] == 1, good_data_mask)
+    f = h5py.File(pedestal_file,'r')
+    packets = np.array(f['packets'])
+    f.close()
+    
+    good_data_mask = (packets['valid_parity'] == 1) & (packets['packet_type'] == 0)
+    packets = packets[good_data_mask]
+    unique_id = ((packets['io_group'].astype(int)*256 \
+        + packets['io_channel'].astype(int))*256 \
+        + packets['chip_id'].astype(int))*64 \
+        + packets['channel_id'].astype(int)
+    unique_id_sort = np.argsort(unique_id)
+    packets[:] = packets[unique_id_sort]
+    unique_id = unique_id[unique_id_sort]
+    
+    # find start and stop indices for each occurrance of a unique id
+    unique_id_set, start_indices = np.unique(unique_id, return_index=True)
+    end_indices = np.roll(start_indices, shift=-1)
+    end_indices[-1] = len(packets) - 1
+    
+    unique_id_chunk_indices = {}
+    for val, start_idx, end_idx in zip(unique_id_set, start_indices, end_indices):
+        unique_id_chunk_indices[val] = (start_idx, end_idx)
 
-        unique_id = ((f['packets'][good_data_mask]['io_group'].astype(int)*256 \
-            + f['packets'][good_data_mask]['io_channel'].astype(int))*256 \
-            + f['packets'][good_data_mask]['chip_id'].astype(int))*64 \
-            + f['packets'][good_data_mask]['channel_id'].astype(int)
-        unique_id_set = np.unique(unique_id)
+    dataword = packets['dataword']
+    
+    avg_pedestal = 0
+    num = 0
+    unique_ped = []
+    for unique in tqdm(unique_id_set, desc=' Calculating channel pedestals'):
+        start_index, stop_index = unique_id_chunk_indices[unique]
+        adcs = dataword[start_index:stop_index]
+        if len(adcs) < 1:
+            continue
+        vals,bins = np.histogram(adcs,bins=np.arange(257))
+        peak_bin = np.argmax(vals)
+        min_idx,max_idx = max(peak_bin-mean_trunc,0), min(peak_bin+mean_trunc,len(vals))
+        ped_adc = np.average(bins[min_idx:max_idx]+0.5, weights=vals[min_idx:max_idx])
 
-        pedestal_dict = dict()
-        dataword = f['packets'][good_data_mask]['dataword']
-
-        for unique in tqdm(unique_id_set):
-            vref_mv = dac2mv(vref_dac,vdda)
-            vcm_mv = dac2mv(vcm_dac,vdda)
-            channel_mask = unique_id == unique
-            adcs = dataword[channel_mask]
-            if len(adcs) < 1:
-                continue
-            vals,bins = np.histogram(adcs,bins=np.arange(257))
-            peak_bin = np.argmax(vals)
-            min_idx,max_idx = max(peak_bin-mean_trunc,0), min(peak_bin+mean_trunc,len(vals))
-            ped_adc = np.average(bins[min_idx:max_idx]+0.5, weights=vals[min_idx:max_idx])
-
-            pedestal_dict[str(unique)] = dict(
-                pedestal_mv=adc2mv(ped_adc,vref_mv,vcm_mv)
-                )
-        avg_pedestal = np.sum(list(pedestal_dict.values()))/len(pedestal_dict)
-        pedestal_dict_new = defaultdict(lambda: avg_pedestal, pedestal_dict)
-
-        import os
-        if not os.path.exists(json_file):
-            import json
-            with open(json_file,'w') as fo:
-                json.dump(pedestal_dict, fo, sort_keys=True, indent=4)
+        ped = adc2mv(ped_adc,vref_mv,vcm_mv)
+        num+=1
+        avg_pedestal += ped
         
-        return pedestal_dict_new
-    else:
-        # if pedestal json already exists, then just open it.
-        with open(json_file,'r') as infile:
-            for key, value in load_json(infile).items():
-                pedestal_dict[key] = value
+        unique_ped.append((unique, ped))
+
+    # make dictionary with found avg pedestal for default
+    avg_pedestal = avg_pedestal/num
+    print(f'avg pedestal = {avg_pedestal}')
+    pedestal_dict = defaultdict(lambda: dict(
+        pedestal_mv=avg_pedestal
+    ))
+    for i in range(num):
+        pedestal_dict[str(unique_ped[i][0])] = dict(
+             pedestal_mv=unique_ped[i][1]
+        )
+    packets=0
+    dataword=0
+    unique_id=0
+    good_data_mask=0
+    unique_ped=0
+    
+    with open(json_file,'w') as fo:
+        json.dump(pedestal_dict, fo, sort_keys=True, indent=4)
+    return pedestal_dict
