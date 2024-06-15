@@ -54,11 +54,55 @@ def get_pixel_positions(packets, ts, pixel_xy):
         txyz=None
     return txyz, packets[packets_keep_mask]
 
-def main(input_packets_file, output_filename, *input_light_files, input_config_name):
+def corner_cut(event, tolerance, special_cases=None):
+    # inputs: clusters; clusters array to apply corner cut on
+    #         tolerance; distance in mm away from corner to cut clusters in any direction
+    #         special_cases (optional); extra points to apply corner cut on, for instance when there are disabled tiles and
+    #                       need to cut extra cosmic clippers. This is a dictionary where the key is either 'xy', 'xz', or 'zy',
+    #                       and the value is a list or tuple of two values being the point to apply cut on in the corresponding
+    #                       view. 
+    # outputs: mask to apply to clusters to remove clusters near corners.
+    pos_names = {'xy': ['x', 'y'], 'xz': ['x', 'z'], 'zy': ['z', 'y']}
+    x_edge, y_edge, z_edge = 305, 615, 305
+    signs = [(-1,-1), (-1,1), (1,1), (1,-1)]
+    overall_mask = True
+    for dims in ['xy', 'xz', 'zy']:
+        pos_name_list = pos_names[dims]
+        if dims == 'xy':
+            xlim, ylim = x_edge, y_edge
+        elif dims == 'xz':
+            xlim, ylim = x_edge, z_edge
+        elif dims == 'zy':
+            xlim, ylim = z_edge, y_edge
+        for sign in signs:
+            dist = np.sqrt((event[pos_name_list[0]] - sign[0]*xlim)**2 + (event[pos_name_list[1]] - sign[1]*ylim)**2)
+            overall_mask = overall_mask & (dist > tolerance)
+        if special_cases is not None:
+            for dim in special_cases.keys():
+                xlim, ylim, side = special_cases[dim][0], special_cases[dim][1], special_cases[dim][2]
+                if dim == 'xy':
+                    dist = np.sqrt((event['x'] - xlim)**2 + (event['y'] - ylim)**2)
+                elif dim == 'xz':
+                    dist = np.sqrt((event['x'] - xlim)**2 + (event['z'] - ylim)**2)
+                elif dim == 'zy':
+                    dist = np.sqrt((event['z'] - xlim)**2 + (event['y'] - ylim)**2)
+                if side == 'left' and dim == 'zy':
+                    side_mask = event['x'] < 0
+                elif side == 'right' and dim == 'zy':
+                    side_mask = event['y'] > 0
+                if side == 'left' and dim == 'xy':
+                    side_mask = event['io_group'] == 2
+                elif side == 'right' and dim == 'xy':
+                    side_mask = event['io_group'] == 1
+                overall_mask = overall_mask & ((dist > tolerance) | side_mask)
+    return overall_mask
+
+def main(input_packets_file, output_filename, pedestal_file, *input_light_files, input_config_name):
     """
     # Args:
           input_packets_file (str): path to file that contains packets
           output_filename (str): path to hdf5 output file
+          pedestal_file (str): path to pedestal h5 file to use
           input_light_files (str): paths to files that contain hdf5 files containing light data processed with adc64format
           input_config_name (str): name of detector (e.g. module-1)
     """
@@ -77,12 +121,21 @@ def main(input_packets_file, output_filename, *input_light_files, input_config_n
     module = ModuleConfig(input_config_name)
     if os.path.exists(output_filename):
         raise Exception('Output file '+ str(output_filename) + ' already exists.')
+    if not os.path.exists(pedestal_file):
+        raise Exception('Input pedestal file '+ str(pedestal_file) + ' does not exist.')
+    
+    # load charge configuration parameters
+    vref = loading.dac2mv(module.vref_dac, consts.vdda)
+    vcm = loading.dac2mv(module.vcm_dac, consts.vdda)
+    print(f'Loading pedestals from {pedestal_file} using vref = {vref:.5f} and vcm_dac = {vcm:.5f}')
+    pedestal_dict = loading.load_pedestals(pedestal_file, vref, vcm)
+    
     # get packets
     f_charge = h5py.File(input_packets_file, 'r')
     packets = np.array(f_charge['packets'])
     f_charge.close()
     pixel_xy = loading.load_geom_dict(module)
-    pedestal_dict, config_dict = loading.load_pedestal_and_config(module)
+    #pedestal_dict, config_dict = loading.load_pedestal_and_config(module)
     
     # parameters
     rate_threshold = 150 # channel rate (Hz) threshold for disabled channels cut
@@ -91,7 +144,9 @@ def main(input_packets_file, output_filename, *input_light_files, input_config_n
     d_LCM = 150 # mm, max distance of cluster from light hit, for 'rect' or 'circle' cuts
     d_ACL = 150
     use_proximity_cut = True
-
+    use_corner_cut = True
+    corner_tolerance = 25
+    
     # get light geometry information
     light_geometry = loading.load_light_geometry(module.light_det_geom_path)
     io0_left_y_plot_dict, io0_right_y_plot_dict, io1_left_y_plot_dict, io1_right_y_plot_dict = get_io_channel_map(input_config_name)
@@ -103,16 +158,15 @@ def main(input_packets_file, output_filename, *input_light_files, input_config_n
 
     print('Getting packet timestamps and sorting by unix timestamp...')    
     
-    # get unix timestamps for all packets
     pkt_0_mask = (packets['packet_type'] == 0) & (packets['valid_parity'] == 1)
-    pkt_4_mask = packets['packet_type'] == 4
     
     # apply high rate channel cut
     print(f'Disabling channels with rate > {rate_threshold} Hz')
     nPackets_before = len(packets)
     packet_unique_id = (((packets['io_group'] * 256 + packets['io_channel']) * 256 + packets['chip_id'])*64 + packets['channel_id'])
     unique_unique_ids, unique_ids_counts = np.unique(packet_unique_id[pkt_0_mask], return_counts=True)
-    total_time = np.max(packets['timestamp'][pkt_4_mask]) - np.min(packets['timestamp'][pkt_4_mask])
+    pkt_4_timestamps = packets['timestamp'][packets['packet_type'] == 4]
+    total_time = np.max(pkt_4_timestamps) - np.min(pkt_4_timestamps)
     unique_ids_rate = unique_ids_counts/total_time
     unique_ids_remove = unique_unique_ids[unique_ids_rate > rate_threshold]
     
@@ -120,18 +174,17 @@ def main(input_packets_file, output_filename, *input_light_files, input_config_n
     print(f'Removed {len(unique_ids_remove)} channels due to high rate.')
     nPackets_after = len(packets)
     print(f'{nPackets_before-nPackets_after} packets removed, {((1-nPackets_after/nPackets_before) * 100):.3f}% packets removed')
-    
-    pkt_0_mask = (packets['packet_type'] == 0) & (packets['valid_parity'] == 1)
-    pkt_4_mask = packets['packet_type'] == 4
-    
+        
     unix_timestamps = np.copy(packets['timestamp']).astype('i8')
-    unix_timestamps[np.invert(pkt_4_mask)] = 0
-    nonzero_indices = np.nonzero(unix_timestamps)[0]
-    unix_timestamps = np.interp(np.arange(len(unix_timestamps)), nonzero_indices, unix_timestamps[nonzero_indices])
+    unix_timestamps[packets['packet_type'] != 4] = 0
+    unix_timestamps = np.interp(np.arange(len(unix_timestamps)), np.nonzero(unix_timestamps)[0], unix_timestamps[np.nonzero(unix_timestamps)[0]])
     pps_timestamps = (packets['timestamp']*0.1*1e3).astype('i8')
     
+    pkt_0_mask = (packets['packet_type'] == 0) & (packets['valid_parity'] == 1)
+    
     # get timestamps and packets for packet type 0 only, apply PPS noise cut
-    ts_mask = pkt_0_mask & np.invert((pps_timestamps > 2e7*0.1*1e3) | (pps_timestamps < 1e6*0.1*1e3))
+    ts_mask = pkt_0_mask \
+            & np.invert((pps_timestamps > 2e7*0.1*1e3) | (pps_timestamps < 1e6*0.1*1e3))
     unix_timestamps = unix_timestamps[ts_mask]
     pps_timestamps = pps_timestamps[ts_mask]
     packets = packets[ts_mask]
@@ -248,7 +301,7 @@ def main(input_packets_file, output_filename, *input_light_files, input_config_n
                             txyz, packets_chunk = get_pixel_positions(packets_chunk, pps_timestamps_chunk, pixel_xy)
                             if txyz is None:
                                 continue
-                                
+                            
                             # cluster packets
                             db = DBSCAN(eps=consts.eps, min_samples=consts.min_samples).fit(txyz) 
                             labels = np.array(db.labels_)
@@ -284,7 +337,7 @@ def main(input_packets_file, output_filename, *input_light_files, input_config_n
                                                     channels_adc1, channels_adc2, isMod2)
 
                                             if np.size(wvfm_sum) > 0:
-                                                wvfm_max = np.max(wvfm_sum)
+                                                wvfm_max = np.max(wvfm_sum[0][pedestal_range[1]:pedestal_range[1]+100])
                                             else:
                                                 wvfm_max = 0
 
@@ -335,6 +388,7 @@ def main(input_packets_file, output_filename, *input_light_files, input_config_n
                                                     iterate_light_trig_index = True
                                                     
                                                     label_ids, n_counts = np.unique(labels_sel, return_counts=True)
+                                                    corner_cut = False
                                                     for k in range(len(n_counts)):
                                                         data = np.zeros((1,), dtype=data_dtype)
                                                         # write information from light to array
@@ -361,19 +415,25 @@ def main(input_packets_file, output_filename, *input_light_files, input_config_n
                                                         data['t'] = t
                                                         data['z'] = z_anode[k] + z_direction[k]*(t - light_tai_ns).astype('f8')*consts.z_drift_factor
                                                         data['z_anode'] = z_anode[k]
+                                                        
+                                                        # cut out events with activity near corners
+                                                        #if use_corner_cut and corner_cut(data, corner_tolerance, special_cases=None):
+                                                        #    corner_cut = True
+                                                        
                                                         packets_cluster = packets_chunk_sel[labels_sel == label_ids[k]]
-                                                        v_ped, v_ref, v_cm = [], [], []
+                                                        v_ped = []
                                                         for packet in packets_cluster:
                                                             unique_id = (((packet['io_group'] * 256 + packet['io_channel']) * 256 + packet['chip_id'])*64 + packet['channel_id'])
-                                                            v_ref.append(config_dict[unique_id]['vref_mv'])
-                                                            v_cm.append(config_dict[unique_id]['vcm_mv'])
                                                             v_ped.append(pedestal_dict[unique_id]['pedestal_mv'])
                                                         v_ped = np.array(v_ped)
-                                                        v_cm = np.array(v_cm)
-                                                        v_ref = np.array(v_ref)
-                                                        adcs = np.sum(np.around(packets_cluster['dataword'].astype('float64') - (v_ped - v_cm)/(v_ref - v_cm) * consts.ADC_COUNTS)).astype('i4')
+                                                        
+                                                        #adcs = np.sum(np.around(packets_cluster['dataword'].astype('float64') - (v_ped - vcm)/(vref - vcm) * consts.ADC_COUNTS)).astype('i4')
+                                                        #adcs = np.sum(np.around(packets_cluster['dataword'].astype('float64') - \
+                                                        #                    v_ped * consts.ADC_COUNTS / (vref - vcm))).astype('i4')
+                                                        q = np.sum((packets_cluster['dataword'].astype('float64')/consts.ADC_COUNTS*(vref - vcm)+vcm-v_ped)*consts.gain * 1e-3)
+                                                        adcs = np.sum(np.around(packets_cluster['dataword'].astype('float64') - (v_ped - vcm)/(vref - vcm) * consts.ADC_COUNTS))
                                                         data['adcs'] = adcs
-                                                        q = adcs.astype('f8')*consts.gain * 1e-3 * (v_ref[0] - v_cm[0])/consts.ADC_COUNTS
+                                                        #q = adcs.astype('f8')*consts.gain * 1e-3 * (vref - vcm)/consts.ADC_COUNTS
                                                         data['q'] = q
                                                         # save new data to hdf5 files
                                                         with h5py.File(output_filename, 'a') as f:
