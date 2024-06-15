@@ -12,6 +12,7 @@ def combine_h5_files(folder_path, output_file):
     
     combined_data = None
     dtype = None
+    header_data = None
     
     for h5_file in tqdm(h5_files):
         file_path = os.path.join(folder_path, h5_file)
@@ -19,6 +20,9 @@ def combine_h5_files(folder_path, output_file):
             if 'events' not in f:
                 raise KeyError(f"No 'events' dataset found in file {h5_file}")
             events_data = f['events'][:]
+            
+            if 'header' in f and header_data is None:
+                header_data = f['header'][:]
             
             if combined_data is None:
                 combined_data = events_data
@@ -30,6 +34,8 @@ def combine_h5_files(folder_path, output_file):
     output_path = os.path.join(folder_path, output_file)
     with h5py.File(output_path, 'w') as f_out:
         f_out.create_dataset('events', data=combined_data)
+        if header_data is not None:
+            f_out.create_dataset('header', data=header_data)
     
     # Remove 'samples' dtype and create new file
     dtype_no_samples = np.dtype([(name, dtype[name]) for name in dtype.names if name != 'samples'])
@@ -42,6 +48,8 @@ def combine_h5_files(folder_path, output_file):
     output_path_no_waveforms = os.path.join(folder_path, output_file_no_waveforms)
     with h5py.File(output_path_no_waveforms, 'w') as f_out_no_waveforms:
         f_out_no_waveforms.create_dataset('events', data=combined_data_no_samples)
+        if header_data is not None:
+            f_out_no_waveforms.create_dataset('header', data=header_data)
 
 if __name__ == "__main__":
     import argparse
