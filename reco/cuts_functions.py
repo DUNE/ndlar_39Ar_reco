@@ -146,12 +146,12 @@ def get_cut_config(input_config_name):
     elif input_config_name == 'module0_run2':
         rows_to_use = [0,1,2,3]
         row_column_to_remove = []
-        pedestal_range = (0, 200)
+        pedestal_range = (0, 80)
         channel_range = (1, 63)
     elif input_config_name == 'module1':
         rows_to_use = [0,1,2,3]
         row_column_to_remove = []
-        pedestal_range = (0, 200)
+        pedestal_range = (0, 50)
         channel_range = (4, 64)
     elif input_config_name == 'module2':
         rows_to_use = [0,1,2,3]
@@ -161,7 +161,7 @@ def get_cut_config(input_config_name):
     elif input_config_name == 'module3':
         rows_to_use = [0,1,2,3]
         row_column_to_remove = []
-        pedestal_range = (0, 200)
+        pedestal_range = (0, 50)
         channel_range = (4, 64)
     else:
         raise ValueError(f'Input config {input_config_name} not recognized.')
