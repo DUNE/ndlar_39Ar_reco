@@ -125,17 +125,14 @@ def main(input_packets_file, output_filename, pedestal_file, *input_light_files,
         raise Exception('Input pedestal file '+ str(pedestal_file) + ' does not exist.')
     
     # load charge configuration parameters
-    vref = loading.dac2mv(module.vref_dac, consts.vdda)
-    vcm = loading.dac2mv(module.vcm_dac, consts.vdda)
+    vref, vcm = loading.dac2mv(module.vref_dac, consts.vdda), loading.dac2mv(module.vcm_dac, consts.vdda)
     print(f'Loading pedestals from {pedestal_file} using vref = {vref:.5f} and vcm_dac = {vcm:.5f}')
     pedestal_dict = loading.load_pedestals(pedestal_file, vref, vcm)
     
     # get packets
-    f_charge = h5py.File(input_packets_file, 'r')
-    packets = np.array(f_charge['packets'])
-    f_charge.close()
+    with h5py.File(input_packets_file, 'r') as f_charge:
+        packets = np.array(f_charge['packets'])
     pixel_xy = loading.load_geom_dict(module)
-    #pedestal_dict, config_dict = loading.load_pedestal_and_config(module)
     
     # parameters
     rate_threshold = 150 # channel rate (Hz) threshold for disabled channels cut
@@ -181,7 +178,6 @@ def main(input_packets_file, output_filename, pedestal_file, *input_light_files,
     pps_timestamps = (packets['timestamp']*0.1*1e3).astype('i8')
     
     pkt_0_mask = (packets['packet_type'] == 0) & (packets['valid_parity'] == 1)
-    
     # get timestamps and packets for packet type 0 only, apply PPS noise cut
     ts_mask = pkt_0_mask \
             & np.invert((pps_timestamps > 2e7*0.1*1e3) | (pps_timestamps < 1e6*0.1*1e3))
@@ -249,7 +245,9 @@ def main(input_packets_file, output_filename, pedestal_file, *input_light_files,
                                 ('max_clusters', int),
                                 ('rate_threshold', float),
                                 ('hit_threshold_LCM', int),
-                                ('hit_threshold_ACL', int)
+                                ('hit_threshold_ACL', int),
+                                ('vref_mv', float),
+                                ('vcm_mv', float)
                             ])
 
                             # Create the structured array
@@ -260,6 +258,7 @@ def main(input_packets_file, output_filename, pedestal_file, *input_light_files,
                             header_data['max_clusters'] = max_clusters
                             header_data['rate_threshold'] = rate_threshold
                             header_data['hit_threshold_LCM'], header_data['hit_threshold_ACL'] = hit_threshold_LCM, hit_threshold_ACL
+                            header_data['vref_mv'], header_data['vcm_mv'] = float(vref), float(vcm)
 
                             with h5py.File(output_filename, 'a') as output_file:
                                 output_file.create_dataset('header', data=header_data)
